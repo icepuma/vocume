@@ -13,11 +13,14 @@ APP=build/Vocume.app
 
 rm -rf build && mkdir -p "$APP/Contents/MacOS"
 
+binaries=()
 for arch in arm64 x86_64; do
-  swiftc -parse-as-library -O -target "$arch-apple-macos$MIN_MACOS" Vocume.swift -o "build/Vocume-$arch"
+  # Separate scratch paths: some SwiftPM versions put every triple's product in the same folder.
+  args=(-c release --product Vocume --triple "$arch-apple-macosx$MIN_MACOS" --scratch-path ".build/$arch")
+  swift build "${args[@]}"
+  binaries+=("$(swift build "${args[@]}" --show-bin-path)/Vocume")
 done
-lipo -create build/Vocume-arm64 build/Vocume-x86_64 -output "$APP/Contents/MacOS/Vocume"
-rm build/Vocume-arm64 build/Vocume-x86_64
+lipo -create "${binaries[@]}" -output "$APP/Contents/MacOS/Vocume"
 
 cp Info.plist "$APP/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "${VERSION%%-*}" "$APP/Contents/Info.plist"
