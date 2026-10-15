@@ -53,6 +53,50 @@ extension Mark {
         )
     }
 
+    /// Where the mark can be reshaped by dragging, as points in its own `x`/`y`/`w`/`h` span
+    /// (0 = the `x`/`y` side, 1 = the `x + w`/`y + h` side, 0.5 = the middle): an arrow's two ends,
+    /// and the corners and edges of boxes, highlights and redactions. Pen, text and steps have none.
+    public var handles: [UnitPoint] {
+        switch kind {
+        case .arrow: [.topLeading, .bottomTrailing]
+        case .box, .highlight, .redact:
+            [.topLeading, .top, .topTrailing, .trailing, .bottomTrailing, .bottom, .bottomLeading, .leading]
+        case .pen, .text, .step: []
+        }
+    }
+
+    /// A handle's position in view coordinates.
+    public func point(of handle: UnitPoint, in size: CGSize) -> CGPoint {
+        CGPoint(x: (x + (w ?? 0) * handle.x) * size.width, y: (y + (h ?? 0) * handle.y) * size.height)
+    }
+
+    /// Moves `handle` to `point` (fractions of the image) and keeps the opposite side in place.
+    /// A box dragged past its opposite edge flips; ``normalize()`` tidies that up afterwards.
+    public mutating func move(_ handle: UnitPoint, to point: CGPoint) {
+        let (width, height) = (w ?? 0, h ?? 0)
+        if handle.x == 0 {
+            w = x + width - point.x
+            x = point.x
+        } else if handle.x == 1 {
+            w = point.x - x
+        }
+        if handle.y == 0 {
+            h = y + height - point.y
+            y = point.y
+        } else if handle.y == 1 {
+            h = point.y - y
+        }
+    }
+
+    /// Gives boxes, highlights and redactions a positive width and height, whichever way they were
+    /// drawn or resized. Arrows keep their direction.
+    public mutating func normalize() {
+        guard [.box, .highlight, .redact].contains(kind), let width = w, let height = h else { return }
+        x = min(x, x + width)
+        y = min(y, y + height)
+        (w, h) = (abs(width), abs(height))
+    }
+
     /// The step marker's circle.
     func stepCircle(in size: CGSize) -> CGRect {
         let unit = Self.unit(for: size) * (self.size ?? 1)

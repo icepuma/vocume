@@ -17,6 +17,7 @@ app:
 
 run: app
 	-pkill -x Vocume
+	@while pgrep -x Vocume > /dev/null; do sleep 0.1; done  # `open` fails while the old one quits
 	open build/Vocume.app
 
 signing:

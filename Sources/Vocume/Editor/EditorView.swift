@@ -148,13 +148,32 @@ struct EditorView: View {
                         .onChanged { model.drag($0, in: size) }
                         .onEnded { model.end($0) }
                 )
-                .pointerStyle(model.tool == .select ? .default : .rectSelection)
+                .onContinuousHover { phase in
+                    if case .active(let location) = phase {
+                        model.hover(at: location, in: size)
+                    } else {
+                        model.hover(at: nil, in: size)
+                    }
+                }
+                .pointerStyle(pointerStyle)
             if let id = model.editing, let mark = model.marks.first(where: { $0.id == id }) {
                 labelField(for: mark, in: size)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Screenshot, \(model.marks.count) \(model.marks.count == 1 ? "mark" : "marks")")
+    }
+
+    /// Resize arrows over a box's handles, a hand over an arrow's ends, a crosshair while drawing.
+    private var pointerStyle: PointerStyle {
+        guard let handle = model.hoveredHandle else { return model.tool == .select ? .default : .rectSelection }
+        let positions: [UnitPoint: FrameResizePosition] = [
+            .topLeading: .topLeading, .top: .top, .topTrailing: .topTrailing, .trailing: .trailing,
+            .bottomTrailing: .bottomTrailing, .bottom: .bottom, .bottomLeading: .bottomLeading, .leading: .leading,
+        ]
+        let isArrow = model.marks.first { $0.id == model.selected }?.kind == .arrow
+        guard !isArrow, let position = positions[handle] else { return .grabIdle }
+        return .frameResize(position: position)
     }
 
     /// An inline text field over the mark's label pill, styled like the pill.

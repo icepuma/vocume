@@ -77,13 +77,29 @@ public enum MarkRenderer {
                     at: CGPoint(x: pill.midX, y: pill.midY)
                 )
             }
-            if mark.id == selected {
-                context.stroke(
-                    Path(roundedRect: mark.bounds(in: size), cornerRadius: 4),
-                    with: .color(.accentColor),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])
-                )
-            }
+            if mark.id == selected { drawSelection(of: mark, in: context, size: size) }
+        }
+    }
+
+    /// The dashed accent outline, plus round handles where the mark can be reshaped. The outline
+    /// runs through the handles for boxes; an arrow shows only its two end handles.
+    private static func drawSelection(of mark: Mark, in context: GraphicsContext, size: CGSize) {
+        let dashed = StrokeStyle(lineWidth: 1.5, dash: [5, 4])
+        switch mark.kind {
+        case .arrow: break
+        case .box, .highlight, .redact:
+            context.stroke(Path(mark.frame(in: size)), with: .color(.accentColor), style: dashed)
+        case .pen, .text, .step:
+            context.stroke(
+                Path(roundedRect: mark.bounds(in: size), cornerRadius: 4), with: .color(.accentColor), style: dashed)
+        }
+        var lifted = context
+        lifted.addFilter(.shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5))
+        for handle in mark.handles {
+            let center = mark.point(of: handle, in: size)
+            let dot = Path(ellipseIn: CGRect(x: center.x - 4.5, y: center.y - 4.5, width: 9, height: 9))
+            lifted.fill(dot, with: .color(.white))
+            context.stroke(dot, with: .color(.accentColor), lineWidth: 1.5)
         }
     }
 

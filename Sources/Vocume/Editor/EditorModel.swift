@@ -26,6 +26,8 @@ import VocumeCore
     @Published private(set) var size = 1.0
     @Published private(set) var selected: UUID?
     @Published var editing: UUID?
+    /// The selected mark's handle under the pointer, for the resize cursor.
+    @Published private(set) var hoveredHandle: UnitPoint?
 
     @Published var prompt = ""
     /// The provider the user picked in the AI bar; see `activeBackend` for the one actually used.
@@ -41,6 +43,11 @@ import VocumeCore
     // Drag state.
     private var active: UUID?
     private var dragStart: Mark?
+    /// The handle being dragged when the drag reshapes the selected mark instead of moving it.
+    private var resizing: UnitPoint?
+    /// The mark the last colour change went to: further changes to it (trying swatches, dragging
+    /// in the colour panel) join that change's undo step.
+    private var colorTarget: UUID?
     private var clickedSelected = false
     private var dragging = false
 
@@ -110,12 +117,14 @@ import VocumeCore
     // MARK: Editing
 
     func snapshot() {
+        colorTarget = nil
         undoStack.append(marks)
         if undoStack.count > 200 { undoStack.removeFirst() }
     }
 
     func undo() {
         guard let last = undoStack.popLast() else { return }
+        colorTarget = nil
         marks = last
         select(nil)
     }
@@ -151,7 +160,10 @@ import VocumeCore
     func setColor(_ name: String) {
         colorName = name
         guard let id = selected else { return }
-        snapshot()
+        if colorTarget != id {
+            snapshot()
+            colorTarget = id
+        }
         update(id) { $0.color = name }
     }
 
@@ -185,6 +197,12 @@ import VocumeCore
             switch tool {
             case .select:
                 guard let origin = dragStart else { return }
+                if let handle = resizing {
+                    let start = origin.point(of: handle, in: CGSize(width: 1, height: 1))
+                    mark = origin
+                    mark.move(handle, to: CGPoint(x: min(max(start.x + dx, 0), 1), y: min(max(start.y + dy, 0), 1)))
+                    return
+                }
                 mark.x = origin.x + dx
                 mark.y = origin.y + dy
                 mark.points = origin.points?.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
@@ -203,6 +221,13 @@ import VocumeCore
     private func begin(at point: CGPoint, viewPoint: CGPoint, viewSize: CGSize) {
         window?.makeFirstResponder(nil)  // so ⌫ and tool keys work after typing a prompt
         guard let kind = tool.markKind else {
+            if let handle = handle(at: viewPoint, in: viewSize), let id = selected {
+                clickedSelected = true  // a press without a drag still edits the label (an arrow's sits on a handle)
+                active = id
+                dragStart = marks.first { $0.id == id }
+                resizing = handle
+                return
+            }
             let hit = marks.last { $0.bounds(in: viewSize).contains(viewPoint) }
             clickedSelected = hit != nil && hit?.id == selected
             select(hit?.id)
@@ -224,11 +249,13 @@ import VocumeCore
         defer {
             active = nil
             dragStart = nil
+            resizing = nil
         }
         let moved = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
         if let id = active, let mark = marks.first(where: { $0.id == id }) {
             switch tool {
             case .select:
+                if resizing != nil { update(id) { $0.normalize() } }
                 if moved < 3 && clickedSelected {  // clicking a selected mark again edits its label
                     editing = id
                     return
@@ -240,17 +267,28 @@ import VocumeCore
             case .arrow, .box, .highlight, .redact:
                 if moved < 4 {
                     marks.removeAll { $0.id == id }
-                } else if tool != .arrow {  // normalize so boxes always grow right/down
-                    update(id) { mark in
-                        mark.x = min(mark.x, mark.x + (mark.w ?? 0))
-                        mark.w = abs(mark.w ?? 0)
-                        mark.y = min(mark.y, mark.y + (mark.h ?? 0))
-                        mark.h = abs(mark.h ?? 0)
-                    }
+                } else {
+                    update(id) { $0.normalize() }  // boxes always grow right/down
                 }
             }
         }
         if marks == undoStack.last { undoStack.removeLast() }  // nothing changed
+    }
+
+    /// Tracks which handle of the selected mark the pointer is over (`nil` location: it left).
+    func hover(at location: CGPoint?, in viewSize: CGSize) {
+        let handle = location.flatMap { tool == .select ? handle(at: $0, in: viewSize) : nil }
+        if handle != hoveredHandle { hoveredHandle = handle }
+    }
+
+    /// The selected mark's handle within reach of a point in view coordinates.
+    private func handle(at viewPoint: CGPoint, in viewSize: CGSize) -> UnitPoint? {
+        guard let id = selected, let mark = marks.first(where: { $0.id == id }) else { return nil }
+        let distance = { (handle: UnitPoint) in
+            let point = mark.point(of: handle, in: viewSize)
+            return hypot(point.x - viewPoint.x, point.y - viewPoint.y)
+        }
+        return mark.handles.filter { distance($0) <= 8 }.min { distance($0) < distance($1) }
     }
 
     // MARK: AI

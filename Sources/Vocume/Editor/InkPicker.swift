@@ -1,8 +1,9 @@
+import AppKit
 import SwiftUI
 import VocumeCore
 
-/// The toolbar's ink control: shows the current colour and opens a popover with the 8 inks and
-/// the S/M/L sizes, so colour and size take one toolbar slot instead of eleven.
+/// The toolbar's ink control: shows the current colour and opens a popover with the inks and the
+/// S/M/L sizes, so colour and size take one toolbar slot.
 struct InkButton: View {
     @ObservedObject var model: EditorModel
     @ObservedObject private var presented = Presented()
@@ -21,7 +22,7 @@ struct InkButton: View {
         }
         .help("Colour and size")
         .popover(isPresented: $presented.isOn, arrowEdge: .bottom) {
-            InkPicker(model: model)
+            InkPicker(model: model) { presented.isOn = false }
         }
     }
 
@@ -31,9 +32,13 @@ struct InkButton: View {
     }
 }
 
-/// The 8 inks and 3 sizes.
+/// The 8 inks, a row of custom colours (the two most recent, the screen eyedropper and the system
+/// colour panel), and the 3 sizes.
 struct InkPicker: View {
     @ObservedObject var model: EditorModel
+    /// Closes the popover, so the eyedropper and colour panel aren't covered by it.
+    let close: () -> Void
+    @ObservedObject private var custom = CustomInks.shared
     @Environment(\.colorSchemeContrast) private var contrast
 
     static let sizes: [(name: String, size: Double, dot: CGFloat)] = [
@@ -50,6 +55,19 @@ struct InkPicker: View {
                         }
                     }
                 }
+                Divider().gridCellUnsizedAxes(.horizontal)
+                GridRow {
+                    ForEach(0..<CustomInks.limit, id: \.self) { index in
+                        if custom.recent.indices.contains(index) {
+                            let hex = custom.recent[index]
+                            swatch(hex, Palette.color(named: hex), label: "Custom colour \(hex)")
+                        } else {
+                            emptySlot
+                        }
+                    }
+                    tool("eyedropper", help: "Pick a colour from the screen", action: pickFromScreen)
+                    tool("paintpalette", help: "Show all colours", action: showColorPanel)
+                }
             }
             Divider()
             HStack(spacing: 8) {
@@ -61,7 +79,7 @@ struct InkPicker: View {
         .padding(14)
     }
 
-    private func swatch(_ name: String, _ color: Color) -> some View {
+    private func swatch(_ name: String, _ color: Color, label: String? = nil) -> some View {
         let selected = model.colorName == name
         return Button {
             model.setColor(name)
@@ -75,9 +93,53 @@ struct InkPicker: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .help(name.capitalized)
-        .accessibilityLabel(name.capitalized)
+        .help(label ?? name.capitalized)
+        .accessibilityLabel(label ?? name.capitalized)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// Where a custom colour will appear once there is one.
+    private var emptySlot: some View {
+        Circle()
+            .strokeBorder(Color.primary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5]))
+            .frame(width: 22, height: 22)
+            .padding(3)
+            .help("Colours you pick appear here")
+            .accessibilityHidden(true)
+    }
+
+    /// A swatch-sized round button for picking a custom colour.
+    private func tool(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.primary.opacity(0.08)))
+                .padding(3)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    /// The system's magnifier: click any pixel on screen, e.g. a background to redact over.
+    private func pickFromScreen() {
+        close()
+        let model = model
+        NSColorSampler().show { color in
+            MainActor.assumeIsolated {
+                guard let color, let hex = Palette.name(for: color) else { return }
+                CustomInks.shared.remember(hex)
+                model.setColor(hex)
+            }
+        }
+    }
+
+    private func showColorPanel() {
+        close()
+        ColorPanelLink.shared.open(for: model)
     }
 
     /// Black and white sit at the luminance extremes and vanish into one appearance without a
@@ -106,5 +168,51 @@ struct InkPicker: View {
         .help("\(size.name) size")
         .accessibilityLabel("\(size.name) size")
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// The user's recent custom colours (`#RRGGBB`), newest first, shared by all editor windows.
+@MainActor final class CustomInks: ObservableObject {
+    static let shared = CustomInks()
+    static let limit = 2
+    private static let key = "customInks"
+
+    @Published private(set) var recent = UserDefaults.standard.stringArray(forKey: key) ?? []
+
+    /// Adds a colour in front; `replacingNewest` updates the front one instead (a colour still
+    /// being adjusted in the colour panel).
+    func remember(_ hex: String, replacingNewest: Bool = false) {
+        var colors = recent
+        if replacingNewest, !colors.isEmpty { colors.removeFirst() }
+        colors.removeAll { $0 == hex }
+        recent = Array(([hex] + colors).prefix(Self.limit))
+        UserDefaults.standard.set(recent, forKey: Self.key)
+    }
+}
+
+/// Connects the shared system colour panel to the editor that last opened it: its colour goes to
+/// that editor's selected mark (or next mark) live, as one undo step and one recent colour.
+@MainActor final class ColorPanelLink: NSObject {
+    static let shared = ColorPanelLink()
+    private weak var model: EditorModel?
+    private var adjusting = false
+
+    func open(for model: EditorModel) {
+        self.model = model
+        adjusting = false
+        let panel = NSColorPanel.shared
+        panel.setTarget(nil)
+        panel.showsAlpha = false
+        panel.color = NSColor(Palette.color(named: model.colorName))
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged(_:)))
+        panel.orderFront(nil)
+    }
+
+    @objc private func colorChanged(_ panel: NSColorPanel) {
+        guard let model, let hex = Palette.name(for: panel.color) else { return }
+        CustomInks.shared.remember(hex, replacingNewest: adjusting)
+        adjusting = true
+        model.setColor(hex)
     }
 }
