@@ -75,3 +75,7 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 To ship signed and notarized builds (no Gatekeeper warning), add these repository secrets: `MACOS_CERT_P12` (base64 of a Developer ID Application certificate), `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID` and `APPLE_APP_PASSWORD`.
+
+## License
+
+[MIT](LICENSE). Copyright © 2026 Stefan Ruzitschka.
