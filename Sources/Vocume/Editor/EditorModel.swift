@@ -197,10 +197,10 @@ import VocumeCore
             switch tool {
             case .select:
                 guard let origin = dragStart else { return }
-                if let handle = resizing {
-                    let start = origin.point(of: handle, in: CGSize(width: 1, height: 1))
+                if let dragged = resizing {
+                    let start = origin.point(of: dragged, in: CGSize(width: 1, height: 1))
                     mark = origin
-                    mark.move(handle, to: CGPoint(x: min(max(start.x + dx, 0), 1), y: min(max(start.y + dy, 0), 1)))
+                    mark.move(dragged, to: CGPoint(x: min(max(start.x + dx, 0), 1), y: min(max(start.y + dy, 0), 1)))
                     return
                 }
                 mark.x = origin.x + dx
@@ -221,11 +221,11 @@ import VocumeCore
     private func begin(at point: CGPoint, viewPoint: CGPoint, viewSize: CGSize) {
         window?.makeFirstResponder(nil)  // so ⌫ and tool keys work after typing a prompt
         guard let kind = tool.markKind else {
-            if let handle = handle(at: viewPoint, in: viewSize), let id = selected {
+            if let grabbed = handle(at: viewPoint, in: viewSize), let id = selected {
                 clickedSelected = true  // a press without a drag still edits the label (an arrow's sits on a handle)
                 active = id
                 dragStart = marks.first { $0.id == id }
-                resizing = handle
+                resizing = grabbed
                 return
             }
             let hit = marks.last { $0.bounds(in: viewSize).contains(viewPoint) }
@@ -277,15 +277,15 @@ import VocumeCore
 
     /// Tracks which handle of the selected mark the pointer is over (`nil` location: it left).
     func hover(at location: CGPoint?, in viewSize: CGSize) {
-        let handle = location.flatMap { tool == .select ? handle(at: $0, in: viewSize) : nil }
-        if handle != hoveredHandle { hoveredHandle = handle }
+        let hovered = tool == .select ? location.flatMap { handle(at: $0, in: viewSize) } : nil
+        if hovered != hoveredHandle { hoveredHandle = hovered }
     }
 
     /// The selected mark's handle within reach of a point in view coordinates.
     private func handle(at viewPoint: CGPoint, in viewSize: CGSize) -> UnitPoint? {
         guard let id = selected, let mark = marks.first(where: { $0.id == id }) else { return nil }
-        let distance = { (handle: UnitPoint) in
-            let point = mark.point(of: handle, in: viewSize)
+        let distance = { (candidate: UnitPoint) in
+            let point = mark.point(of: candidate, in: viewSize)
             return hypot(point.x - viewPoint.x, point.y - viewPoint.y)
         }
         return mark.handles.filter { distance($0) <= 8 }.min { distance($0) < distance($1) }
