@@ -24,11 +24,12 @@ Vocume lives in the menu bar. Capture an area, a window or the screen and it ope
 
 ## Features
 
-- **Hand tools:** arrows, boxes, highlights, solid redaction, pen, text and numbered steps. Boxes and arrows resize by their handles.
+- **Hand tools:** arrows, lines, boxes, ellipses, highlights, solid redaction, pen, text and numbered steps. Shapes resize by their handles; hold Shift for squares, circles and 45° lines.
+- **Crop:** by hand with the Crop tool, or ask the AI ("crop to the error dialog"). Cropping never moves your marks and can be changed or undone.
 - **Colours:** 8 inks, any custom colour from the system colour panel, or an eyedropper to pick one straight off the screen.
 - **AI that hits the right spot:** the model decides *what* to mark; on-device text recognition decides *where*, down to single letters.
 - **No API keys:** uses the Claude Code or Codex login you already have, or a model running locally in Ollama.
-- **Out of the way:** global capture shortcuts, one editor window per capture, back to the menu bar when you're done.
+- **Out of the way:** global capture shortcuts, one editor window per capture, drag the result straight into Slack or a GitHub issue, back to the menu bar when you're done.
 
 ## Install
 
@@ -59,12 +60,16 @@ In the editor:
 
 | Action | Keys |
 |---|---|
-| Select · Arrow · Box · Highlight · Redact · Pen · Text · Step | V · A · R · H · X · P · T · N |
-| Undo · Delete selected mark · Deselect | ⌘Z · ⌫ · Esc |
+| Select · Arrow · Line · Box · Ellipse · Highlight · Redact · Pen · Text · Step · Crop | V · A · L · R · O · H · X · P · T · N · C |
+| Apply the crop | ↩ or Esc (or pick another tool) |
+| Undo · Redo · Delete selected mark · Deselect | ⌘Z · ⇧⌘Z · ⌫ · Esc |
+| Move the selected mark 1 px · 10 px | Arrow keys · Shift-arrow keys |
+| Square / circle / 45° while drawing; keep proportions while resizing | hold Shift |
+| Zoom in · out · actual size · fit (or pinch) | ⌘+ · ⌘− · ⌘0 · ⌘9 |
 | Ask the AI · Stop it | ⌘↩ · Esc |
 | Copy the annotated image · Save it | ⇧⌘C · ⌘S |
 
-Colour and size are under **Ink** in the toolbar. Drag a selected mark to move it, or drag its handles to resize it; click it again to edit its label. Closing a window with marks you haven't copied or saved asks first.
+Colour and size are under **Ink** in the toolbar. Drag a selected mark to move it, or drag its handles to resize it; click it again to edit its label. To share, drag the hand icon in the toolbar into another app, or copy or save. Closing a window with marks you haven't copied or saved asks first.
 
 ## AI annotation
 

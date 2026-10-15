@@ -11,9 +11,7 @@ struct EditorView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        print
-            .padding(28)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { geometry in workspace(geometry.size) }
             .floatingBottomBar {
                 if settings.isEnabled { Composer(model: model) }
             }
@@ -43,12 +41,65 @@ struct EditorView: View {
             }
     }
 
+    /// The print fitted to the window, or at a set zoom in a scroll view that stays centred as it
+    /// grows. Pinching zooms either way.
+    private func workspace(_ size: CGSize) -> some View {
+        let viewport = CGSize(width: max(size.width - 56, 1), height: max(size.height - 56, 1))
+        return Group {
+            if let zoomed = model.zoomedSize {
+                ScrollView([.horizontal, .vertical]) {
+                    print(zoomed)
+                        .padding(28)
+                        .frame(minWidth: size.width, minHeight: size.height)
+                }
+                .defaultScrollAnchor(.center)
+                .defaultScrollAnchor(.center, for: .sizeChanges)
+            } else {
+                print(nil)
+                    .padding(28)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .simultaneousGesture(
+            MagnifyGesture()
+                .onChanged { model.pinch($0.magnification) }
+                .onEnded { _ in model.endPinch() }
+        )
+        .onAppear { model.viewport = viewport }
+        .onChange(of: viewport) { model.viewport = viewport }
+    }
+
     /// The screenshot as a print resting on the table: a hairline edge and a soft lift shadow.
-    private var print: some View {
-        Image(nsImage: model.image)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .overlay { GeometryReader { geometry in canvas(geometry.size) } }
+    /// `size` fixes it at a zoom; `nil` fits it to the space. Only the cropped part shows: the
+    /// whole image and its marks are laid out full size and shifted, so marks keep whole-image
+    /// coordinates.
+    private func print(_ size: CGSize?) -> some View {
+        let crop = model.visibleCrop
+        let visible = model.visiblePixelSize
+        return Color.clear
+            .aspectRatio(visible.width / max(visible.height, 1), contentMode: .fit)
+            .frame(width: size?.width, height: size?.height)
+            .overlay {
+                GeometryReader { geometry in
+                    let full = CGSize(
+                        width: geometry.size.width / crop.width, height: geometry.size.height / crop.height)
+                    let offset = CGPoint(x: crop.minX * full.width, y: crop.minY * full.height)
+                    // Drawing at the bottom, then mouse input, then the label field being edited.
+                    ZStack(alignment: .topLeading) {
+                        Image(nsImage: model.image).resizable().frame(width: full.width, height: full.height)
+                        canvas(full)
+                    }
+                    .frame(width: full.width, height: full.height, alignment: .topLeading)
+                    .offset(x: -offset.x, y: -offset.y)
+                    .allowsHitTesting(false)
+                    gestures(full: full, offset: offset)
+                    if let id = model.editing, let mark = model.marks.first(where: { $0.id == id }) {
+                        labelField(for: mark, in: full)
+                            .frame(width: full.width, height: full.height, alignment: .topLeading)
+                            .offset(x: -offset.x, y: -offset.y)
+                    }
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -58,9 +109,13 @@ struct EditorView: View {
             .contextMenu { canvasMenu }
     }
 
+    /// The size an export will have: the cropped part, also while the Crop tool shows everything.
     private var pixelSize: String {
-        guard let rep = model.image.representations.first, rep.pixelsWide > 0 else { return "" }
-        return "\(rep.pixelsWide) × \(rep.pixelsHigh) px"
+        let crop = model.crop ?? EditorModel.wholeImage
+        let size = CGSize(width: model.pixelSize.width * crop.width, height: model.pixelSize.height * crop.height)
+        guard size.width > 0 else { return "" }
+        return "\(Int(size.width.rounded())) × \(Int(size.height.rounded())) px"
+            + (model.crop == nil ? "" : " (cropped)")
     }
 
     // MARK: Toolbar
@@ -75,10 +130,27 @@ struct EditorView: View {
             }
             .pickerStyle(.segmented)
             .labelStyle(.iconOnly)
-            .help("Tools: V A R H X P T N")
+            .help("Tools: V A L R O H X P T N C")
         }
         ToolbarItem(placement: .principal) {
             InkButton(model: model)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button("Zoom In", action: model.zoomIn)
+                Button("Zoom Out", action: model.zoomOut)
+                Button("Actual Size") { model.setZoom(1) }
+                Button("Zoom to Fit", action: model.zoomToFit)
+                Divider()
+                ForEach([0.5, 1, 2, 4], id: \.self) { level in
+                    Button("\(Int(level * 100))%") { model.setZoom(level) }
+                }
+            } label: {
+                Text("\(Int((model.effectiveZoom * 100).rounded()))%").monospacedDigit()
+            }
+            .fixedSize()
+            .help("Zoom  ⌘+  ⌘−  ⌘0 actual size  ⌘9 fit")
+            .accessibilityLabel("Zoom, \(Int((model.effectiveZoom * 100).rounded())) percent")
         }
         ToolbarItem(placement: .primaryAction) {
             Button("Undo", systemImage: "arrow.uturn.backward", action: model.undo)
@@ -87,6 +159,17 @@ struct EditorView: View {
         }
         if #available(macOS 26, *) {
             ToolbarSpacer(.fixed, placement: .primaryAction)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            // Not a button: a button takes the mouse-down, so the drag would never start.
+            Image(systemName: "hand.draw")
+                .font(.system(size: 15))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+                .onDrag { model.dragItem() }
+                .onTapGesture { model.flash("Drag this into another app") }
+                .help("Drag the annotated image into another app")
+                .accessibilityLabel("Drag the annotated image into another app")
         }
         ToolbarItem(placement: .primaryAction) {
             Button("Copy", systemImage: "doc.on.doc", action: model.copyImage)
@@ -114,6 +197,8 @@ struct EditorView: View {
             .disabled(model.selected == nil)
         Button("Clear All Marks", systemImage: "xmark.bin", action: model.clear)
             .disabled(model.marks.isEmpty)
+        Button("Reset Crop", systemImage: "crop", action: model.resetCrop)
+            .disabled(model.crop == nil)
         Divider()
         Button("Copy Image", systemImage: "doc.on.doc", action: model.copyImage)
         Button("Save…", systemImage: "square.and.arrow.down") { model.save() }
@@ -135,33 +220,37 @@ struct EditorView: View {
 
     // MARK: Canvas
 
+    /// The marks (and the crop frame while cropping), drawn over the whole image at `size`.
     private func canvas(_ size: CGSize) -> some View {
-        ZStack(alignment: .topLeading) {
-            Canvas { context, canvasSize in
-                MarkRenderer.draw(
-                    model.marks, in: context, size: canvasSize, selected: model.selected, editing: model.editing)
-            }
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { model.drag($0, in: size) }
-                        .onEnded { model.end($0) }
-                )
-                .onContinuousHover { phase in
-                    if case .active(let location) = phase {
-                        model.hover(at: location, in: size)
-                    } else {
-                        model.hover(at: nil, in: size)
-                    }
-                }
-                .pointerStyle(pointerStyle)
-            if let id = model.editing, let mark = model.marks.first(where: { $0.id == id }) {
-                labelField(for: mark, in: size)
+        Canvas { context, canvasSize in
+            MarkRenderer.draw(
+                model.marks, in: context, size: canvasSize, selected: model.selected, editing: model.editing)
+            if model.tool == .crop, let crop = model.crop {
+                MarkRenderer.drawCrop(crop, in: context, size: canvasSize)
             }
         }
+        .frame(width: size.width, height: size.height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Screenshot, \(model.marks.count) \(model.marks.count == 1 ? "mark" : "marks")")
+    }
+
+    /// Mouse input on the visible part of the print, handed on in whole-image coordinates.
+    private func gestures(full: CGSize, offset: CGPoint) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { model.drag($0, in: full, offset: offset) }
+                    .onEnded { model.end($0) }
+            )
+            .onContinuousHover { phase in
+                if case .active(let location) = phase {
+                    model.hover(at: location, in: full, offset: offset)
+                } else {
+                    model.hover(at: nil, in: full)
+                }
+            }
+            .pointerStyle(pointerStyle)
     }
 
     /// Resize arrows over a box's handles, a hand over an arrow's ends, a crosshair while drawing.
@@ -171,8 +260,8 @@ struct EditorView: View {
             .topLeading: .topLeading, .top: .top, .topTrailing: .topTrailing, .trailing: .trailing,
             .bottomTrailing: .bottomTrailing, .bottom: .bottom, .bottomLeading: .bottomLeading, .leading: .leading,
         ]
-        let isArrow = model.marks.first { $0.id == model.selected }?.kind == .arrow
-        guard !isArrow, let position = positions[handle] else { return .grabIdle }
+        let kind = model.marks.first { $0.id == model.selected }?.kind
+        guard kind != .arrow, kind != .line, let position = positions[handle] else { return .grabIdle }
         return .frameResize(position: position)
     }
 

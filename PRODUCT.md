@@ -26,7 +26,7 @@ AI annotation that lands on exact words and letters: the model decides *what* to
 
 ## Capabilities and Constraints
 
-- Tools: select, arrow, box, highlight, redact (solid, secure), pen, text, numbered step; boxes and arrows resize by their handles; 8 named colours plus custom colours (screen eyedropper, system colour panel); S/M/L sizes; undo; copy (⇧⌘C) and save (⌘S) at full resolution.
+- Tools: select, arrow, line, box, ellipse, highlight, redact (solid, secure), pen, text, numbered step, crop (by hand or by AI, non-destructive); shapes resize by their handles, Shift constrains (square, circle, 45°, proportions); arrow keys nudge; undo and redo; zoom (toolbar menu, ⌘+/⌘−/⌘0/⌘9, pinch); drag the annotated image out to other apps; 8 named colours plus custom colours (screen eyedropper, system colour panel); S/M/L sizes; undo; copy (⇧⌘C) and save (⌘S) at full resolution.
 - AI: Claude or Codex via the installed CLI; AI marks are ordinary editable marks. Requests are blocked while one runs.
 - Must build with only the Xcode Command Line Tools (no SwiftUI macros: `@State`, `@Observable`, `#Preview`). macOS 15+.
 - Quality over speed is a standing rule for AI behaviour.

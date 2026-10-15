@@ -28,6 +28,15 @@ struct AnnotationPromptTests {
         for name in Palette.colors.map(\.name) { #expect(prompt.contains(name)) }
     }
 
+    /// Every kind the app understands is offered to the AI, in the prompt and in the reply schema.
+    @Test func offersEveryKind() {
+        let prompt = AnnotationPrompt.make(request: "", textSummary: "")
+        for kind in Mark.Kind.allCases {
+            #expect(prompt.contains("\"\(kind.rawValue)\""), "prompt lacks \(kind.rawValue)")
+            #expect(AnnotationPrompt.replySchema.contains("\"\(kind.rawValue)\""))
+        }
+    }
+
     @Test func fallsBackToDefaults() {
         let prompt = AnnotationPrompt.make(request: "", textSummary: "")
         #expect(prompt.contains(AnnotationPrompt.defaultRequest))

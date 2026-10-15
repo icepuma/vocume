@@ -77,6 +77,11 @@ import UniformTypeIdentifiers
     @objc private func saveImage() { Windows.shared.keyEditor?.save() }
     @objc private func copyImage() { Windows.shared.keyEditor?.copyImage() }
     @objc private func undoMark() { Windows.shared.keyEditor?.undo() }
+    @objc private func redoMark() { Windows.shared.keyEditor?.redo() }
+    @objc private func zoomIn() { Windows.shared.keyEditor?.zoomIn() }
+    @objc private func zoomOut() { Windows.shared.keyEditor?.zoomOut() }
+    @objc private func actualSize() { Windows.shared.keyEditor?.setZoom(1) }
+    @objc private func zoomToFit() { Windows.shared.keyEditor?.zoomToFit() }
     @objc private func deleteMark() { Windows.shared.keyEditor?.deleteSelected() }
 
     // MARK: Menus
@@ -125,6 +130,7 @@ import UniformTypeIdentifiers
 
         let edit = NSMenu(title: "Edit")
         edit.addItem(menuItem("Undo", #selector(undoMark), "z"))
+        edit.addItem(menuItem("Redo", #selector(redoMark), "Z"))
         edit.addItem(.separator())
         edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
@@ -134,6 +140,12 @@ import UniformTypeIdentifiers
         edit.addItem(delete)
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
 
+        let view = NSMenu(title: "View")
+        view.addItem(menuItem("Zoom In", #selector(zoomIn), "+"))
+        view.addItem(menuItem("Zoom Out", #selector(zoomOut), "-"))
+        view.addItem(menuItem("Actual Size", #selector(actualSize), "0"))
+        view.addItem(menuItem("Zoom to Fit", #selector(zoomToFit), "9"))
+
         let window = NSMenu(title: "Window")
         window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
@@ -142,7 +154,7 @@ import UniformTypeIdentifiers
             withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         NSApp.windowsMenu = window
 
-        for submenu in [app, file, edit, window] {
+        for submenu in [app, file, edit, view, window] {
             main.addItem(withTitle: submenu.title, action: nil, keyEquivalent: "").submenu = submenu
         }
         return main

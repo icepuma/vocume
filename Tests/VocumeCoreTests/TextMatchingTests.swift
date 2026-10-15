@@ -101,6 +101,54 @@ struct TextMatchingTests {
         #expect(abs(start - target.lowerBound) < 6 && abs(end - target.upperBound) < 6)
     }
 
+    @Test func linesUnderlineAndEllipsesEncloseText() throws {
+        let rendered = RenderedText("underline me")
+        let box = try #require(rendered.screenshot.resolve([Mark(kind: .box, x: 0, y: 0, match: "me")]).first)
+        let line = try #require(rendered.screenshot.resolve([Mark(kind: .line, x: 0, y: 0, match: "me")]).first)
+        let ellipse = try #require(rendered.screenshot.resolve([Mark(kind: .ellipse, x: 0, y: 0, match: "me")]).first)
+        #expect(line.h == 0 && line.y > box.y, "a flat line under the text")
+        #expect(ellipse.x < box.x && (ellipse.w ?? 0) > (box.w ?? 0), "wider than the box, so it clears the corners")
+    }
+
+    /// Vision reads the digit in "v0.4.0" as a letter O; the match still lands on it.
+    @Test func toleratesOCRLookalikes() throws {
+        let rendered = RenderedText("release v0.4.0 now")
+        let misread = RecognizedScreenshot(
+            lines: [.init(text: "release vO.4.0 now", box: rendered.line.box)], pixels: Pixels(rendered.image)!)
+        let mark = try #require(misread.resolve([Mark(kind: .box, x: 0, y: 0, match: "v0.4.0")]).first)
+        let target = rendered.span(of: rendered.text.range(of: "v0.4.0")!)
+        let center = rendered.pixelX(mark.x + (mark.w ?? 0) / 2)
+        #expect(target.contains(center))
+    }
+
+    /// OCR read one copy right and one wrong; either spelling finds both.
+    @Test func lookalikesMatchEveryCopy() {
+        let rendered = RenderedText("v0.4.0 and v0.4.0")
+        let mixed = RecognizedScreenshot(
+            lines: [.init(text: "vO.4.0 and v0.4.0", box: rendered.line.box)], pixels: Pixels(rendered.image)!)
+        #expect(mixed.resolve([Mark(kind: .box, x: 0, y: 0, match: "vO.4.0")]).count == 2)
+        #expect(mixed.resolve([Mark(kind: .box, x: 0, y: 0, match: "v0.4.0")]).count == 2)
+    }
+
+    @Test func exactMatchesBeatLookalikes() {
+        #expect(RenderedText("O and 0").screenshot.resolve([Mark(kind: .box, x: 0, y: 0, match: "0")]).count == 1)
+    }
+
+    @Test func contextPicksOneOccurrence() throws {
+        let rendered = RenderedText("v1 here and v1 there")
+        let marks = rendered.screenshot.resolve([Mark(kind: .box, x: 0, y: 0, match: "v1", context: "v1 there")])
+        try #require(marks.count == 1)
+        let second = rendered.text.range(of: "v1", options: .backwards)!
+        #expect(rendered.span(of: second).contains(rendered.pixelX(marks[0].x + (marks[0].w ?? 0) / 2)))
+    }
+
+    @Test func cropByTextKeepsAMargin() throws {
+        let rendered = RenderedText("crop to me please")
+        let box = try #require(rendered.screenshot.resolve([Mark(kind: .box, x: 0, y: 0, match: "me")]).first)
+        let crop = try #require(rendered.screenshot.resolve([Mark(kind: .crop, x: 0, y: 0, match: "me")]).first)
+        #expect(crop.kind == .crop && crop.x < box.x && (crop.h ?? 0) > (box.h ?? 0))
+    }
+
     @Test func repeatedMatchesMarkOnce() {
         let match = Mark(kind: .redact, x: 0, y: 0, match: "on")
         #expect(RenderedText("on only").screenshot.resolve([match, match, match]).count == 2)

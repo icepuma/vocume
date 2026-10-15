@@ -12,14 +12,22 @@ public enum AnnotationPrompt {
             You annotate a screenshot using an annotation app's tools. The user's request: \(request)
 
             The screenshot is attached. Respond with ONLY a JSON array, no prose. Each item has:
-            - "type": "arrow" | "box" | "highlight" (translucent marker) | "redact" (solid filled block that hides content) \
-            | "pen" (freehand line) | "text" (a note) | "step" (auto-numbered circle 1, 2, 3…)
+            - "type": "arrow" | "line" (plain line; with "match" it underlines the text) | "box" \
+            | "ellipse" (circles something) | "highlight" (translucent marker) \
+            | "redact" (solid filled block that hides content) | "pen" (freehand line) | "text" (a note) \
+            | "step" (auto-numbered circle 1, 2, 3…) \
+            | "crop" (crops the image to this area: with "match" it keeps a margin around the text; several crop \
+            items crop to the area that contains them all, e.g. a panel's title and its last button)
             - a position, either:
               - "match": exact text to find. The app places one mark on EVERY occurrence, precisely, via OCR. \
             Prefer this whenever the target is visible text, even a single letter. Case-sensitive unless "anyCase": true. \
-            Also matches inside longer words ("on" hits "only") unless "word": true (whole words only).
-              - or "x","y","w","h": fractions 0-1 of image width/height, origin top-left. box/highlight/redact: the rectangle. \
-            arrow: from (x,y) to (x+w,y+h), tip at the end. text/step: x,y is the spot. pen: "points": [[x,y], …] instead.
+            Also matches inside longer words ("on" hits "only") unless "word": true (whole words only). \
+            OCR may confuse look-alikes (0/O, 1/l/I); matching allows for that, so write the text as you see it.
+                - "context" (optional, with "match"): a longer exact text around the one occurrence you mean, \
+            when the same text appears several times but needs different marks or labels. Never fall back to \
+            x,y for visible text.
+              - or "x","y","w","h" (only for things that are not text): fractions 0-1 of image width/height, origin top-left. \
+            box/ellipse/highlight/redact/crop: the rectangle. arrow/line: from (x,y) to (x+w,y+h), an arrow's tip at the end. text/step: x,y is the spot. pen: "points": [[x,y], …] instead.
             - "color": \(Palette.colors.map(\.name).joined(separator: " | ")) (default \(Palette.defaultName))
             - "size": 0.6 small, 1 medium, 1.6 large (default 1)
             - "label": short note shown in a coloured pill. Only include it when a note helps; never for plain \
@@ -41,7 +49,7 @@ public enum AnnotationPrompt {
         return """
             {"type":"array","items":{"type":"object","properties":{\
             "type":{"type":"string","enum":\(list(Mark.Kind.allCases.map(\.rawValue)))},\
-            "match":{"type":"string"},\
+            "match":{"type":"string"},"context":{"type":"string"},\
             "color":{"type":"string","enum":\(list(Palette.colors.map(\.name)))},\
             "label":{"type":"string"},"size":\(number),"word":{"type":"boolean"},"anyCase":{"type":"boolean"},\
             "x":\(number),"y":\(number),"w":\(number),"h":\(number),\

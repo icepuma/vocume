@@ -25,6 +25,13 @@ public enum MarkRenderer {
             switch mark.kind {
             case .arrow:
                 drawArrow(from: start, to: end, lineWidth: lineWidth, color: color, in: shadowed)
+            case .line:
+                var path = Path()
+                path.move(to: start)
+                path.addLine(to: end)
+                shadowed.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            case .ellipse:
+                shadowed.stroke(Path(ellipseIn: mark.frame(in: size)), with: .color(color), lineWidth: lineWidth)
             case .highlight:
                 var multiply = context
                 multiply.blendMode = .multiply
@@ -59,6 +66,8 @@ public enum MarkRenderer {
                 )
             case .text:
                 break  // the label pill below is the whole mark
+            case .crop:
+                continue  // an instruction, not ink
             case .box:
                 shadowed.stroke(
                     Path(roundedRect: mark.frame(in: size), cornerRadius: 4 * baseUnit),
@@ -86,13 +95,34 @@ public enum MarkRenderer {
     private static func drawSelection(of mark: Mark, in context: GraphicsContext, size: CGSize) {
         let dashed = StrokeStyle(lineWidth: 1.5, dash: [5, 4])
         switch mark.kind {
-        case .arrow: break
-        case .box, .highlight, .redact:
+        case .arrow, .line, .crop: break
+        case .box, .ellipse, .highlight, .redact:
             context.stroke(Path(mark.frame(in: size)), with: .color(.accentColor), style: dashed)
         case .pen, .text, .step:
             context.stroke(
                 Path(roundedRect: mark.bounds(in: size), cornerRadius: 4), with: .color(.accentColor), style: dashed)
         }
+        drawHandles(of: mark, in: context, size: size)
+    }
+
+    /// The Crop tool's frame: everything outside it dimmed, a white edge and the 8 resize handles.
+    /// `crop` is in fractions of the image.
+    public static func drawCrop(_ crop: CGRect, in context: GraphicsContext, size: CGSize) {
+        let frame = CGRect(
+            x: crop.minX * size.width, y: crop.minY * size.height,
+            width: crop.width * size.width, height: crop.height * size.height)
+        var outside = Path(CGRect(origin: .zero, size: size))
+        outside.addRect(frame)
+        context.fill(outside, with: .color(.black.opacity(0.5)), style: FillStyle(eoFill: true))
+        var lifted = context
+        lifted.addFilter(.shadow(color: .black.opacity(0.4), radius: 2))
+        lifted.stroke(Path(frame), with: .color(.white), lineWidth: 1.5)
+        let proxy = Mark(kind: .crop, x: crop.minX, y: crop.minY, w: crop.width, h: crop.height)
+        drawHandles(of: proxy, in: context, size: size)
+    }
+
+    /// Round handles (9pt, white with an accent ring) where the mark can be reshaped.
+    private static func drawHandles(of mark: Mark, in context: GraphicsContext, size: CGSize) {
         var lifted = context
         lifted.addFilter(.shadow(color: .black.opacity(0.3), radius: 1.5, y: 0.5))
         for handle in mark.handles {

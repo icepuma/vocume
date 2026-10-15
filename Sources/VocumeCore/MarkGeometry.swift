@@ -41,25 +41,29 @@ extension Mark {
         let (point, anchor): (CGPoint, UnitPoint) =
             switch kind {
             case .text: (start, .topLeading)
-            case .arrow: (start, .center)  // label sits on the tail; the arrow points at the thing
+            case .arrow, .line: (start, .center)  // label sits on the tail; the arrow points at the thing
             case .step: (CGPoint(x: start.x + 18 * unit, y: start.y), .leading)
             case .pen: (start, .bottomLeading)
-            case .box, .highlight, .redact:
+            case .box, .ellipse, .highlight, .redact, .crop:
                 (CGPoint(x: frame(in: size).minX, y: frame(in: size).minY - 6 * unit), .bottomLeading)
             }
+        // Kept inside the image, so a label near an edge isn't cut off in the export.
         return CGRect(
-            origin: CGPoint(x: point.x - pill.width * anchor.x, y: point.y - pill.height * anchor.y),
+            origin: CGPoint(
+                x: max(min(point.x - pill.width * anchor.x, size.width - pill.width), 0),
+                y: max(min(point.y - pill.height * anchor.y, size.height - pill.height), 0)),
             size: pill
         )
     }
 
     /// Where the mark can be reshaped by dragging, as points in its own `x`/`y`/`w`/`h` span
     /// (0 = the `x`/`y` side, 1 = the `x + w`/`y + h` side, 0.5 = the middle): an arrow's two ends,
-    /// and the corners and edges of boxes, highlights and redactions. Pen, text and steps have none.
+    /// a line's or arrow's two ends, and the corners and edges of boxes, ellipses, highlights and
+    /// redactions. Pen, text and steps have none.
     public var handles: [UnitPoint] {
         switch kind {
-        case .arrow: [.topLeading, .bottomTrailing]
-        case .box, .highlight, .redact:
+        case .arrow, .line: [.topLeading, .bottomTrailing]
+        case .box, .ellipse, .highlight, .redact, .crop:
             [.topLeading, .top, .topTrailing, .trailing, .bottomTrailing, .bottom, .bottomLeading, .leading]
         case .pen, .text, .step: []
         }
@@ -88,13 +92,73 @@ extension Mark {
         }
     }
 
-    /// Gives boxes, highlights and redactions a positive width and height, whichever way they were
-    /// drawn or resized. Arrows keep their direction.
+    /// Shift while drawing: boxes, ellipses, highlights and redactions become square, arrows and
+    /// lines snap to 45° steps, keeping the start point. `aspect` is the image's width / height, so
+    /// "square" and "45°" hold in pixels.
+    public mutating func constrain(aspect: Double) {
+        let (dx, dy) = ((w ?? 0) * aspect, h ?? 0)  // in units of the image height
+        switch kind {
+        case .box, .ellipse, .highlight, .redact, .crop:
+            let side = max(abs(dx), abs(dy))
+            (w, h) = ((dx < 0 ? -side : side) / aspect, dy < 0 ? -side : side)
+        case .arrow, .line:
+            let step = Double.pi / 4
+            let angle = (atan2(dy, dx) / step).rounded() * step
+            let length = hypot(dx, dy)
+            (w, h) = (cos(angle) * length / aspect, sin(angle) * length)
+        case .pen, .text, .step:
+            break
+        }
+    }
+
+    /// Shift while dragging `handle` (after ``move(_:to:)``): a corner keeps the proportions of
+    /// `original`; an arrow's or line's end snaps to 45° around the other end. Edges are unaffected.
+    public mutating func constrain(_ handle: UnitPoint, from original: Mark, aspect: Double) {
+        let unit = CGSize(width: 1, height: 1)
+        switch kind {
+        case .arrow, .line:
+            let end = point(of: .bottomTrailing, in: unit)
+            constrain(aspect: aspect)
+            if handle == .topLeading {  // dragging the start: the end stays put
+                (x, y) = (end.x - (w ?? 0), end.y - (h ?? 0))
+            }
+        case .box, .ellipse, .highlight, .redact, .crop:
+            guard handle.x != 0.5, handle.y != 0.5 else { return }
+            let anchor = original.point(of: UnitPoint(x: 1 - handle.x, y: 1 - handle.y), in: unit)
+            let was = original.point(of: handle, in: unit)
+            let now = point(of: handle, in: unit)
+            let (wasX, wasY) = (was.x - anchor.x, was.y - anchor.y)
+            guard wasX != 0, wasY != 0 else { return }
+            let (nowX, nowY) = (now.x - anchor.x, now.y - anchor.y)
+            let scale = max(abs(nowX / wasX), abs(nowY / wasY))
+            let corner = CGPoint(
+                x: anchor.x + (nowX < 0 ? -1 : 1) * abs(wasX) * scale,
+                y: anchor.y + (nowY < 0 ? -1 : 1) * abs(wasY) * scale)
+            move(handle, to: corner)
+        case .pen, .text, .step:
+            break
+        }
+    }
+
+    /// Gives boxes, ellipses, highlights and redactions a positive width and height, whichever way
+    /// they were drawn or resized. Arrows and lines keep their direction.
     public mutating func normalize() {
-        guard [.box, .highlight, .redact].contains(kind), let width = w, let height = h else { return }
+        guard [.box, .ellipse, .highlight, .redact, .crop].contains(kind), let width = w, let height = h else {
+            return
+        }
         x = min(x, x + width)
         y = min(y, y + height)
         (w, h) = (abs(width), abs(height))
+    }
+
+    /// The area the AI's crop items ask for (fractions of the image): all of them together, kept
+    /// inside the image. `nil` without crop items, or if they enclose nothing.
+    public static func cropArea(of marks: [Mark]) -> CGRect? {
+        let crops = marks.filter { $0.kind == .crop }.map { $0.frame(in: CGSize(width: 1, height: 1)) }
+        guard let first = crops.first else { return nil }
+        let area = crops.dropFirst().reduce(first) { $0.union($1) }.intersection(
+            CGRect(x: 0, y: 0, width: 1, height: 1))
+        return area.isNull || area.width < 0.01 || area.height < 0.01 ? nil : area
     }
 
     /// The step marker's circle.

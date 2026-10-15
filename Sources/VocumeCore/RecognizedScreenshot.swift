@@ -92,15 +92,21 @@ public struct RecognizedScreenshot: Sendable {
         let measured = lines.map { TextLine($0, pixels: pixels) }
         return marks.flatMap { mark -> [Mark] in
             guard let query = mark.match, !query.isEmpty else { return [mark] }
-            var pattern = NSRegularExpression.escapedPattern(for: query)
-            if mark.word == true { pattern = "(?<![\\p{L}\\p{N}])" + pattern + "(?![\\p{L}\\p{N}])" }
-            let options: NSRegularExpression.Options = mark.anyCase == true ? .caseInsensitive : []
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
-            return measured.flatMap { line in
-                regex.matches(in: line.text, range: NSRange(line.text.startIndex..., in: line.text))
-                    .compactMap { Range($0.range, in: line.text) }
-                    .map { mark.placed(on: line.locate($0, pixels: pixels), pixels: pixels) }
+            let anyCase = mark.anyCase == true
+            var hits = Self.find(query, wholeWords: mark.word == true, anyCase: anyCase, in: measured)
+            // A context narrows a repeated match to the occurrence inside it (ignored if it's nowhere).
+            if let context = mark.context, !context.isEmpty {
+                let around = Self.find(context, wholeWords: false, anyCase: anyCase, in: measured)
+                if !around.isEmpty {
+                    hits = hits.filter { hit in
+                        around.contains {
+                            $0.line == hit.line && $0.range.lowerBound <= hit.range.lowerBound
+                                && hit.range.upperBound <= $0.range.upperBound
+                        }
+                    }
+                }
             }
+            return hits.map { mark.placed(on: measured[$0.line].locate($0.range, pixels: pixels), pixels: pixels) }
         }.reduce(into: []) { kept, mark in
             if !kept.contains(where: {
                 var other = $0; other.id = mark.id; return other == mark
@@ -108,6 +114,44 @@ public struct RecognizedScreenshot: Sendable {
                 kept.append(mark)
             }
         }
+    }
+}
+
+extension RecognizedScreenshot {
+    /// OCR's look-alike characters: Vision reads "v0.4.0" as "vO.4.0" and "l" as "1" often enough.
+    private static let lookalikes: [Set<Character>] = [
+        ["0", "O", "o"], ["1", "l", "I", "|"], ["5", "S"], ["8", "B"],
+    ]
+
+    /// Every occurrence of `text` in the lines, with look-alike characters treated as equal: OCR
+    /// misreads some copies of a text and not others, and the AI may copy either spelling. Text with
+    /// fewer than 3 other characters ("0", "lol") would hit look-alikes everywhere, so it matches
+    /// exactly and falls back to look-alikes only when there is no exact match at all.
+    fileprivate static func find(
+        _ text: String, wholeWords: Bool, anyCase: Bool, in lines: [TextLine]
+    ) -> [(line: Int, range: Range<String.Index>)] {
+        let distinctive = text.filter { character in !lookalikes.contains { $0.contains(character) } }.count >= 3
+        for tolerant in distinctive ? [true] : [false, true] {
+            var pattern =
+                tolerant
+                ? text.map { character in
+                    lookalikes.first { $0.contains(character) }.map {
+                        "[" + $0.sorted().map(String.init).joined() + "]"
+                    }
+                        ?? NSRegularExpression.escapedPattern(for: String(character))
+                }.joined()
+                : NSRegularExpression.escapedPattern(for: text)
+            if wholeWords { pattern = "(?<![\\p{L}\\p{N}])" + pattern + "(?![\\p{L}\\p{N}])" }
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: anyCase ? .caseInsensitive : [])
+            else { return [] }
+            let hits = lines.enumerated().flatMap { index, line in
+                regex.matches(in: line.text, range: NSRange(line.text.startIndex..., in: line.text))
+                    .compactMap { Range($0.range, in: line.text) }
+                    .map { (line: index, range: $0) }
+            }
+            if !hits.isEmpty { return hits }
+        }
+        return []
     }
 }
 
@@ -121,8 +165,12 @@ extension Mark {
         let width = Double(pixels.width)
         let height = Double(pixels.height)
         let lineHeight = box.height * height
-        let pad = lineHeight * (kind == .box ? 0.3 : 0.06)
-        let rect = box.insetBy(dx: -pad / width, dy: -pad / height)
+        // Covers hug the text, boxes leave room, a crop keeps some of what surrounds it.
+        let pad = lineHeight * (kind == .crop ? 2 : kind == .box || kind == .ellipse ? 0.3 : 0.06)
+        var rect = box.insetBy(dx: -pad / width, dy: -pad / height)
+        if kind == .ellipse {  // an ellipse through the box's corners encloses it: √2 × each axis
+            rect = rect.insetBy(dx: -rect.width * 0.207, dy: -rect.height * 0.207)
+        }
         switch kind {
         case .arrow:  // points at the text from up-left
             mark.x = rect.minX - 2.5 * lineHeight / width
@@ -135,7 +183,12 @@ extension Mark {
         case .text:
             mark.x = rect.minX
             mark.y = rect.maxY + pad / height
-        case .box, .highlight, .redact, .pen:
+        case .line:  // underlines the text
+            mark.x = rect.minX
+            mark.y = rect.maxY
+            mark.w = rect.width
+            mark.h = 0
+        case .box, .ellipse, .highlight, .redact, .pen, .crop:
             mark.x = rect.minX
             mark.y = rect.minY
             mark.w = rect.width

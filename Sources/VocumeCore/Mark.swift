@@ -7,7 +7,8 @@ import Foundation
 /// export at any resolution. The JSON shape is also what the AI is asked to return.
 public struct Mark: Codable, Identifiable, Equatable, Sendable {
     public enum Kind: String, Codable, CaseIterable, Sendable {
-        case arrow, box, highlight, redact, pen, text, step
+        /// `crop` is never drawn: it is how the AI asks for a crop, and the frame the Crop tool edits.
+        case arrow, line, box, ellipse, highlight, redact, pen, text, step, crop
     }
 
     public var id = UUID()
@@ -32,6 +33,9 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
     public var word: Bool?
     /// Match ignoring case.
     public var anyCase: Bool?
+    /// AI only: longer text around the occurrence meant, so one occurrence of a repeated `match`
+    /// can get its own mark or label.
+    public var context: String?
 
     public init(
         kind: Kind,
@@ -45,7 +49,8 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
         points: [CGPoint]? = nil,
         match: String? = nil,
         word: Bool? = nil,
-        anyCase: Bool? = nil
+        anyCase: Bool? = nil,
+        context: String? = nil
     ) {
         self.kind = kind
         self.x = x
@@ -59,11 +64,12 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
         self.match = match
         self.word = word
         self.anyCase = anyCase
+        self.context = context
     }
 
     enum CodingKeys: String, CodingKey {
         case kind = "type"
-        case x, y, w, h, label, color, size, points, match, word, anyCase
+        case x, y, w, h, label, color, size, points, match, word, anyCase, context
     }
 
     /// Lenient decoding for AI replies: marks that use `match` have no position, and an unknown
@@ -82,6 +88,7 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
         match = try c.decodeIfPresent(String.self, forKey: .match)
         word = try c.decodeIfPresent(Bool.self, forKey: .word)
         anyCase = try c.decodeIfPresent(Bool.self, forKey: .anyCase)
+        context = try c.decodeIfPresent(String.self, forKey: .context)
     }
 
     /// Whether the mark is an empty text note (one the user started but never typed into).

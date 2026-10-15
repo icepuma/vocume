@@ -27,6 +27,12 @@ struct MarkGeometryTests {
         #expect(pill.width > 0 && pill.height > 0)
     }
 
+    @Test func labelsStayInsideTheImage() {
+        let mark = Mark(kind: .box, x: 0.9, y: 0.01, w: 0.08, h: 0.05, label: "A long label near the right edge")
+        let pill = mark.labelRect(in: size)
+        #expect(pill.minX >= 0 && pill.maxX <= size.width && pill.minY >= 0 && pill.maxY <= size.height)
+    }
+
     @Test func boundsCoverShapeAndLabel() {
         let mark = Mark(kind: .box, x: 0.2, y: 0.4, w: 0.2, h: 0.2, label: "Look")
         let bounds = mark.bounds(in: size)
@@ -77,5 +83,59 @@ struct MarkGeometryTests {
         #expect(abs(tip.x - 0.3) < 1e-9 && abs(tip.y - 0.6) < 1e-9)
         arrow.normalize()  // arrows keep their direction
         #expect(arrow.x == 0.1 && arrow.y == 0.1)
+    }
+
+    @Test func ellipsesResizeLikeBoxesAndLinesLikeArrows() {
+        #expect(Mark(kind: .ellipse, x: 0, y: 0).handles.count == 8)
+        #expect(Mark(kind: .line, x: 0, y: 0).handles == [.topLeading, .bottomTrailing])
+        var ellipse = Mark(kind: .ellipse, x: 0.5, y: 0.5, w: -0.2, h: -0.1)
+        ellipse.normalize()
+        #expect(abs(ellipse.x - 0.3) < 1e-9 && abs((ellipse.w ?? 0) - 0.2) < 1e-9)
+    }
+
+    @Test func shiftMakesBoxesSquareInPixels() {
+        var box = Mark(kind: .box, x: 0.1, y: 0.1, w: 0.3, h: -0.2)
+        box.constrain(aspect: 2)  // a 2:1 image: 0.3 of the width is 0.6 of the height
+        #expect(abs((box.w ?? 0) * 2 - 0.6) < 1e-9 && abs((box.h ?? 0) + 0.6) < 1e-9)
+    }
+
+    @Test func shiftSnapsArrowsTo45Degrees() {
+        var arrow = Mark(kind: .arrow, x: 0.1, y: 0.1, w: 0.3, h: 0.05)
+        arrow.constrain(aspect: 1)
+        #expect(abs(arrow.h ?? 1) < 1e-9)
+        var diagonal = Mark(kind: .line, x: 0.1, y: 0.1, w: 0.3, h: 0.25)
+        diagonal.constrain(aspect: 1)
+        #expect(abs((diagonal.w ?? 0) - (diagonal.h ?? 1)) < 1e-9)
+    }
+
+    @Test func shiftKeepsProportionsWhenDraggingACorner() {
+        let original = Mark(kind: .box, x: 0.2, y: 0.2, w: 0.4, h: 0.2)
+        var box = original
+        box.move(.bottomTrailing, to: CGPoint(x: 0.9, y: 0.45))
+        box.constrain(.bottomTrailing, from: original, aspect: 1)
+        #expect(box.x == 0.2 && box.y == 0.2)
+        #expect(abs((box.w ?? 0) / (box.h ?? 1) - 2) < 1e-9, "still 2:1")
+    }
+
+    @Test func shiftOnAnArrowStartKeepsTheTip() {
+        let original = Mark(kind: .arrow, x: 0.1, y: 0.1, w: 0.4, h: 0.4)
+        var arrow = original
+        arrow.move(.topLeading, to: CGPoint(x: 0.05, y: 0.45))  // 6° off flat
+        arrow.constrain(.topLeading, from: original, aspect: 1)
+        let tip = arrow.point(of: .bottomTrailing, in: CGSize(width: 1, height: 1))
+        #expect(abs(tip.x - 0.5) < 1e-9 && abs(tip.y - 0.5) < 1e-9)
+        #expect(abs(arrow.h ?? 1) < 1e-9, "snapped flat")
+    }
+
+    @Test func cropItemsCropToTheAreaHoldingThemAll() throws {
+        let area = try #require(
+            Mark.cropArea(of: [
+                Mark(kind: .crop, x: 0.1, y: 0.2, w: 0.2, h: 0.1),
+                Mark(kind: .box, x: 0.9, y: 0.9, w: 0.05, h: 0.05),  // not a crop item
+                Mark(kind: .crop, x: 0.5, y: 0.6, w: 0.7, h: 0.1),  // runs off the right edge
+            ]))
+        #expect(abs(area.minX - 0.1) < 1e-9 && abs(area.minY - 0.2) < 1e-9)
+        #expect(abs(area.maxX - 1) < 1e-9 && abs(area.maxY - 0.7) < 1e-9)
+        #expect(Mark.cropArea(of: [Mark(kind: .box, x: 0, y: 0, w: 1, h: 1)]) == nil)
     }
 }

@@ -258,3 +258,17 @@ Settings is a standard grouped Form (520pt wide): an "Annotate with AI" switch, 
 - **Handles:** a selected box, highlight or redaction shows 8 round handles (9pt, white fill, 1.5pt accent ring, faint lift shadow) on its frame, with the dashed accent outline running through them; an arrow shows a handle on each end and no outline. Pen, text and steps keep the dashed bounds outline and are sized with S/M/L. Hovering a handle shows the matching resize cursor (an open hand on arrow ends). A press on a handle without a drag counts as a click, so a selected arrow's label (which sits on its tail handle) still opens for editing.
 - **Ink popover:** below the 8 inks, a divider and a custom row of four 22pt circles: the 2 most recent custom colours (dashed placeholder rings until there are any), the screen eyedropper (`eyedropper`, `NSColorSampler`) and the system colour panel (`paintpalette`). Tool circles are neutral (primary 0.08 fill, secondary glyph); the rainbow stays reserved for AI. Custom inks are `#RRGGBB`, their label text black or white by WCAG luminance. Colour changes to one mark in a row (trying swatches, dragging in the panel) are one undo step.
 
+## Revision: line, ellipse, redo, nudge, drag out
+
+- **Tools:** Line (`line.diagonal`, L) after Arrow and Ellipse (`circle`, O) after Box in the segmented control. Lines select and resize like arrows (two end handles, open-hand cursor); ellipses like boxes (8 handles on the dashed bounding frame). AI `line` matches become underlines; AI `ellipse` matches are sized √2 larger than the text box so the ellipse clears its corners.
+- **Shift:** squares and circles, 45° lines and arrows while drawing; corners keep proportions and line ends snap to 45° around the other end while resizing. Measured in image pixels.
+- **Keyboard:** ⇧⌘Z redo (also Edit ▸ Redo); arrow keys move the selected mark 1 image pixel, Shift 10. Repeated nudges or colour changes on one mark are one undo step.
+- **Drag out:** a `hand.draw` toolbar item before Copy; dragging it hands over the annotated PNG (named like the Save default) to any app, clicking it explains. It is a plain view, not a button, because a button would swallow the drag.
+- **Zoom:** a percentage menu (monospaced digits) leads the trailing toolbar group: Zoom In, Zoom Out, Actual Size, Zoom to Fit, then 50/100/200/400%. The same commands sit in a View menu with ⌘+ ⌘− ⌘0 ⌘9, and a trackpad pinch zooms. Fit is the default and follows the window; any other zoom (10–800%, 100% = one image pixel per screen pixel) puts the print in a two-axis scroll view anchored at its centre, so it grows around what you were looking at. Marks scale with the print; selection handles keep their screen size.
+
+## Revision: crop
+
+- **Crop tool** (`crop`, C) last in the segmented control. While active the whole image shows, dimmed (black 0.5) outside the frame, with a 1.5pt white edge and the 8 standard handles: drag outside to draw a frame, inside to move it, a handle to resize (Shift keeps proportions). ↩, Esc or another tool applies it; the canvas menu has Reset Crop.
+- **Applied:** only the cropped part is laid out, fitted and zoomed like a whole image; marks keep whole-image coordinates, so they are clipped, never moved. Copy, Save and drag-out export the cropped part; the subtitle shows its size with "(cropped)".
+- **AI:** `crop` items (by `match` with a two-line-height margin, or by coordinates) crop to the area holding them all, applied with the reply's marks as one undo step.
+
