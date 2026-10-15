@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1024" height="1024" viewBox="0 0 256 256"
+     fill="none" role="img" aria-labelledby="vocume-title vocume-desc">
+  <title id="vocume-title">Vocume</title>
+  <desc id="vocume-desc">A coral V ending in an annotation arrow, framed by three ivory screenshot-capture corners on a graphite rounded square.</desc>
+
+  <rect id="background" width="256" height="256" rx="56" fill="#191A22"/>
+
+  <g id="capture-frame" fill="#F5F2EC">
+    <path d="M91 53H74C62.402 53 53 62.402 53 74V91H65V74C65 69.029 69.029 65 74 65H91Z"/>
+    <path d="M191 165V182C191 186.971 186.971 191 182 191H165V203H182C193.598 203 203 193.598 203 182V165Z"/>
+    <path d="M91 191H74C69.029 191 65 186.971 65 182V165H53V182C53 193.598 62.402 203 74 203H91Z"/>
+  </g>
+
+  <path id="v-annotation-arrow" fill="#FF6A52"
+        d="M76 98H100L128 156L157 95L141 88L190 64L196 118L179 108L142 184H114Z"/>
+</svg>

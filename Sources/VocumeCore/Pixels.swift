@@ -40,11 +40,22 @@ struct Pixels: Sendable {
     /// clearly unlike the background (the most common colour in `rect`)? Works for dark-on-light and
     /// light-on-dark text alike.
     func inkColumns(in rect: CGRect) -> (firstColumn: Int, ink: [Bool]) {
+        guard let (xs, ys, isInk) = inkTest(in: rect) else { return (max(Int(rect.minX * Double(width)), 0), []) }
+        return (xs.lowerBound, xs.map { x in ys.contains { isInk(x, $0) } })
+    }
+
+    /// Like ``inkColumns(in:)``, per pixel row.
+    func inkRows(in rect: CGRect) -> (firstRow: Int, ink: [Bool]) {
+        guard let (xs, ys, isInk) = inkTest(in: rect) else { return (max(Int(rect.minY * Double(height)), 0), []) }
+        return (ys.lowerBound, ys.map { y in xs.contains { isInk($0, y) } })
+    }
+
+    private func inkTest(in rect: CGRect) -> (Range<Int>, Range<Int>, (Int, Int) -> Bool)? {
         let x0 = max(Int(rect.minX * Double(width)), 0)
         let x1 = min(Int(rect.maxX * Double(width)), width)
         let y0 = max(Int(rect.minY * Double(height)), 0)
         let y1 = min(Int(rect.maxY * Double(height)), height)
-        guard x1 > x0, y1 > y0 else { return (x0, []) }
+        guard x1 > x0, y1 > y0 else { return nil }
 
         func rgb(_ x: Int, _ y: Int) -> (Int, Int, Int) {
             let i = (y * width + x) * 4
@@ -60,12 +71,12 @@ struct Pixels: Sendable {
         }
         let key = counts.max { $0.value < $1.value }?.key ?? 0
         let background = ((key >> 8) * 16 + 8, (key >> 4 & 15) * 16 + 8, (key & 15) * 16 + 8)
-        let ink = (x0..<x1).map { x in
-            (y0..<y1).contains { y in
+        return (
+            x0..<x1, y0..<y1,
+            { x, y in
                 let (r, g, b) = rgb(x, y)
                 return max(abs(r - background.0), abs(g - background.1), abs(b - background.2)) > 72
             }
-        }
-        return (x0, ink)
+        )
     }
 }

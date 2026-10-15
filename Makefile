@@ -1,4 +1,4 @@
-.PHONY: build run test lint format check dmg clean
+.PHONY: build app run test lint format check dmg signing clean
 
 SWIFT_SOURCES := Package.swift Sources Tests
 
@@ -11,8 +11,16 @@ TEST_FLAGS := $(if $(findstring CommandLineTools,$(DEVELOPER_DIR_PATH)),\
 build:
 	swift build
 
-run: build
-	swift run Vocume
+# A signed .app for this Mac. Run `make signing` once first so permissions survive rebuilds.
+app:
+	ARCHS=$(shell uname -m) DMG=0 VERSION=0.0.0-dev scripts/build.sh
+
+run: app
+	-pkill -x Vocume
+	open build/Vocume.app
+
+signing:
+	scripts/dev-signing.sh
 
 test:
 	swift test $(TEST_FLAGS)

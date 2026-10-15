@@ -1,8 +1,10 @@
+<p align="center"><img src="assets/vocume.svg" width="128" height="128" alt="Vocume logo"></p>
+
 # Vocume
 
 A macOS menu-bar app for annotating screenshots — by hand, or by asking Claude or Codex.
 
-Take a screenshot and Vocume opens it in an editor: arrows, boxes, highlights, solid redaction, pen, text and numbered steps. Or type what you want ("redact every email address", "point out the UI bugs") and Claude or Codex marks it up for you, using on-device text recognition to hit exact words and letters. Copy (⇧⌘C) or save (⌘S) the result.
+Capture with Vocume's shortcuts or menu and it opens in an editor: arrows, boxes, highlights, solid redaction, pen, text and numbered steps. Or type what you want ("redact every email address", "point out the UI bugs") and Claude or Codex marks it up for you, using on-device text recognition to hit exact words and letters. Copy (⇧⌘C) or save (⌘S) the result.
 
 *Named after the Goa'uld vo'cume from Stargate SG-1 — a device that records what it sees and plays it back.*
 
@@ -24,21 +26,43 @@ Requires macOS 15 or later.
 
 ## AI annotation
 
-Vocume uses the `claude` ([Claude Code](https://claude.com/claude-code)) or `codex` CLI you already have installed and logged in — your subscription, no API keys. Install at least one and sign in once in a terminal.
+Vocume works with what you already have — no API keys:
+
+- **Claude** — the `claude` CLI ([Claude Code](https://claude.com/claude-code)), signed in with your subscription.
+- **Codex** — the `codex` CLI, signed in with ChatGPT.
+- **Ollama** — a vision model running locally ([ollama.com](https://ollama.com)), e.g. `ollama pull qwen2.5vl`.
+
+Open **Settings…** (⌘, from the menu-bar icon) to see what was detected on your Mac, choose which providers to offer, pick the Ollama model, or turn AI off entirely (the AI bar disappears).
 
 ## Usage
 
-- Screenshots saved to your screenshot folder or copied to the clipboard (⌃⌘⇧4) open automatically.
-- Tools: **V** select · **A** arrow · **R** box · **H** highlight · **X** redact · **P** pen · **T** text · **N** step. ⌘Z undo, ⌫ delete, Esc deselect.
-- Menu-bar icon → **Open Image…** to annotate any PNG or JPEG.
+Vocume lives in the menu bar. Capture with a shortcut or from its menu, and the screenshot opens in the editor:
+
+| Capture | Default shortcut |
+|---|---|
+| Area (Space switches to window mode, Esc cancels) | ⌥⇧⌘4 |
+| Window | ⌥⇧⌘W |
+| Entire screen (the one under the pointer) | ⌥⇧⌘3 |
+| Entire screen in 5 seconds | menu only |
+
+Change or clear the shortcuts in **Settings…** (⌘,). The menu also has **Open Image…** and **Annotate Clipboard Image** for images you already have.
+
+In the editor:
+
+- Tools: **V** select · **A** arrow · **R** box · **H** highlight · **X** redact · **P** pen · **T** text · **N** step; colour and size under **Ink**.
+- ⌘Z undo, ⌫ delete, Esc deselect; ⇧⌘C copies the annotated image, ⌘S saves it. Closing with uncopied, unsaved marks asks first.
+- While an editor is open Vocume shows in the Dock and ⌘-Tab; closing the last one returns it to the menu bar.
 
 ## Build from source
 
 ```bash
-make run                  # build and launch
+make signing              # once: a stable local signing identity (see below)
+make run                  # build build/Vocume.app for this Mac and launch it
 make check                # lint, build and test (what CI runs)
 VERSION=0.1.0 make dmg    # → build/Vocume.app and build/Vocume-0.1.0.dmg
 ```
+
+**Permissions survive rebuilds.** macOS ties privacy permissions such as Screen Recording to an app's code signature. `make signing` creates a self-signed "Vocume Local Development" identity in its own keychain (`~/Library/Application Support/dev.icepuma.vocume/`; no trust settings changed), and every local build is signed with it, so you grant a permission once. Without it builds are ad-hoc signed and each one looks like a new app. Remove it with `scripts/dev-signing.sh --remove`.
 
 Needs only the Xcode Command Line Tools with Swift 6.2 or later (`xcode-select --install`). Contributor notes are in [AGENTS.md](AGENTS.md).
 

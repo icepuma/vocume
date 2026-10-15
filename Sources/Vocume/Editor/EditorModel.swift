@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import VocumeCore
 
@@ -11,7 +12,14 @@ import VocumeCore
     let image: NSImage
     weak var window: NSWindow?
 
-    @Published var marks: [Mark] = []
+    @Published var marks: [Mark] = [] {
+        didSet { if marks != oldValue { hasUnexportedChanges = true } }
+    }
+    /// Marks changed since the last copy or save; closing asks first, and the close button shows
+    /// the standard "edited" dot.
+    var hasUnexportedChanges = false {
+        didSet { window?.isDocumentEdited = hasUnexportedChanges }
+    }
     @Published private(set) var undoStack: [[Mark]] = []
     @Published private(set) var tool = Tool.arrow
     @Published private(set) var colorName = Palette.defaultName
@@ -20,7 +28,9 @@ import VocumeCore
     @Published var editing: UUID?
 
     @Published var prompt = ""
+    /// The provider the user picked in the AI bar; see `activeBackend` for the one actually used.
     @Published var backend = AIBackend.claude
+    let settings = AISettings.shared
     @Published private(set) var isBusy = false
     /// What the AI step is doing, shown in the overlay.
     @Published private(set) var stage = ""
@@ -35,15 +45,28 @@ import VocumeCore
     private var dragging = false
 
     private var keyMonitor: Any?
+    /// The running AI request; results from any other (cancelled) request are ignored.
+    private var activeRequest: UUID?
+    private var cancelActiveRequest: (@Sendable () -> Void)?
+    private var requestTask: Task<Void, Never>?
+    /// The provider the running request went to, so switching it off in Settings can stop it.
+    private var requestBackend: AIBackend?
+    private var settingsObservation: AnyCancellable?
     // OCR runs and a `claude` process starts as soon as the window opens, so Annotate only waits
     // on the model itself.
     private let recognition: Task<RecognizedScreenshot?, Never>
-    private var claude = ClaudeSession()
+    private var claude: ClaudeSession?
 
     init(url: URL) {
         self.url = url
         image = NSImage(contentsOf: url) ?? NSImage()
         recognition = Task.detached { RecognizedScreenshot(contentsOf: url) }
+        followSettings()
+        // Settings can change while the window is open; `objectWillChange` fires before the new
+        // values land, so act on the next run-loop turn.
+        settingsObservation = settings.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.followSettings() } }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKey(event) ?? event
         }
@@ -57,7 +80,11 @@ import VocumeCore
 
     private func handleKey(_ event: NSEvent) -> NSEvent? {
         guard event.window === window else { return event }
-        if event.keyCode == 53 {  // esc
+        if event.keyCode == 53 {  // esc: cancel a running request first, then deselect
+            if isBusy {
+                cancelAI()
+                return nil
+            }
             select(nil)
             window?.makeFirstResponder(nil)
             return nil
@@ -228,35 +255,88 @@ import VocumeCore
 
     // MARK: AI
 
+    /// Keeps this window consistent with Settings: stops a request whose provider (or AI as a whole)
+    /// was switched off, and starts or stops the pre-warmed Claude process to match.
+    private func followSettings() {
+        if isBusy, let backend = requestBackend, !settings.usable.contains(backend) {
+            cancelAI(announce: false)
+        }
+        if settings.wantsWarmClaude {
+            if claude?.isRunning != true { claude = ClaudeSession() }
+        } else if let warm = claude {
+            warm.cancel()
+            claude = nil
+        }
+    }
+
+    /// The provider a request goes to: the picked one when it's usable, else the first usable one.
+    var activeBackend: AIBackend? {
+        settings.usable.contains(backend) ? backend : settings.usable.first
+    }
+
     func askAI() {
-        guard !isBusy else { return }
+        guard !isBusy, let backend = activeBackend else { return }
         isBusy = true
         busySince = Date()
         stage = "Reading the text in your screenshot"
         error = ""
         let request = prompt
-        let backend = backend
+        let ollamaModel = settings.ollamaModel
         let url = url
         let recognition = recognition
+        let id = UUID()
+        requestBackend = backend
         // Each Claude session takes one request: use the warm one and start the next.
-        let session = backend == .claude ? (claude.isRunning ? claude : ClaudeSession()) : nil
+        let session = backend == .claude ? (claude?.isRunning == true ? claude : ClaudeSession()) : nil
         if session != nil { claude = ClaudeSession() }
-        Task.detached {
+        // Codex runs as a fresh process; create it here so Cancel can terminate it.
+        let codex = Process()
+        activeRequest = id
+        cancelActiveRequest = {
+            session?.cancel()
+            if codex.isRunning { codex.terminate() }
+        }
+        requestTask = Task.detached {
             let screenshot = await recognition.value
-            await MainActor.run { self.stage = "\(backend.displayName) is annotating" }
-            let result = Result { () throws -> [Mark] in
+            await MainActor.run { if self.activeRequest == id { self.stage = "\(backend.displayName) is annotating" } }
+            let result: Result<[Mark], any Error>
+            do {
                 guard let screenshot else {
                     throw AnnotationError(description: "Couldn't read \(url.lastPathComponent)")
                 }
                 let prompt = AnnotationPrompt.make(request: request, textSummary: screenshot.textSummary)
-                let reply = try backend.ask(prompt, image: url, claude: session)
-                return screenshot.resolve(try AnnotationPrompt.parseMarks(from: reply))
+                let reply = try await backend.ask(
+                    prompt, image: url, claude: session, codex: codex, ollamaModel: ollamaModel)
+                result = .success(screenshot.resolve(try AnnotationPrompt.parseMarks(from: reply)))
+            } catch {
+                result = .failure(error)
             }
-            await MainActor.run { self.finishAI(result) }
+            await MainActor.run { self.finishAI(result, request: id) }
         }
     }
 
-    private func finishAI(_ result: Result<[Mark], any Error>) {
+    /// Stops the running request; anything it still returns is ignored. `announce` shows the
+    /// "cancelled" toast (off when Settings, not the user, stopped it).
+    func cancelAI() { cancelAI(announce: true) }
+
+    private func cancelAI(announce: Bool) {
+        guard isBusy else { return }
+        cancelActiveRequest?()
+        requestTask?.cancel()  // stops an in-flight Ollama HTTP request
+        activeRequest = nil
+        cancelActiveRequest = nil
+        requestTask = nil
+        requestBackend = nil
+        isBusy = false
+        if announce { flash("Request cancelled") }
+    }
+
+    private func finishAI(_ result: Result<[Mark], any Error>, request: UUID) {
+        guard request == activeRequest else { return }  // cancelled meanwhile
+        activeRequest = nil
+        cancelActiveRequest = nil
+        requestTask = nil
+        requestBackend = nil
         isBusy = false
         switch result {
         case .success(let new) where new.isEmpty:
@@ -291,28 +371,30 @@ import VocumeCore
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setData(png, forType: .png)
-        pasteboard.setData(Data(), forType: ScreenshotSources.ownPasteboardType)
+        hasUnexportedChanges = false
         flash("Copied to clipboard")
     }
 
-    func save() {
+    /// Saves a PNG via the save sheet; `thenClose` closes the window once it's written.
+    func save(thenClose: Bool = false) {
         guard let png = renderedPNG(), let window else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + " annotated.png"
         panel.beginSheetModal(for: window) { response in
             guard response == .OK, let destination = panel.url else { return }
-            ScreenshotSources.ownFileNames.insert(destination.lastPathComponent)
             do {
                 try png.write(to: destination)
+                self.hasUnexportedChanges = false
                 self.flash("Saved \(destination.lastPathComponent)")
+                if thenClose { window.close() }
             } catch {
                 self.error = "\(error)"
             }
         }
     }
 
-    private func flash(_ message: String) {
+    func flash(_ message: String) {
         toast = message
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
             if self?.toast == message { self?.toast = nil }

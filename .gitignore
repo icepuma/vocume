@@ -6,3 +6,5 @@ DerivedData/
 xcuserdata/
 *.xcodeproj/
 .DS_Store
+.impeccable/review/
+.impeccable/questions/

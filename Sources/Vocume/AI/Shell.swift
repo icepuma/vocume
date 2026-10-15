@@ -13,8 +13,22 @@ enum Shell {
     }
 
     /// Runs a command to completion and returns its stdout; throws with stderr on a non-zero exit.
-    static func run(_ arguments: [String], in directory: URL) throws -> String {
-        let process = Process()
+    /// Pass `process` to keep a handle for terminating it from elsewhere.
+    static func run(_ arguments: [String], in directory: URL, process: Process = Process()) throws -> String {
+        let result = try capture(arguments, in: directory, process: process)
+        guard result.status == 0 else {
+            throw AnnotationError(description: "\(arguments[0]) exited \(result.status): \(result.stderr.suffix(500))")
+        }
+        return result.stdout
+    }
+
+    /// Runs a command to completion and returns its exit status and output, whatever the status.
+    /// `env` exits with 127 when the command isn't installed.
+    static func capture(
+        _ arguments: [String],
+        in directory: URL = FileManager.default.temporaryDirectory,
+        process: Process = Process()
+    ) throws -> (status: Int32, stdout: String, stderr: String) {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = arguments
         process.currentDirectoryURL = directory
@@ -30,12 +44,7 @@ enum Shell {
         try process.run()
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            let stderr = (try? String(contentsOf: errors, encoding: .utf8)) ?? ""
-            throw AnnotationError(
-                description: "\(arguments[0]) exited \(process.terminationStatus): \(stderr.suffix(500))"
-            )
-        }
-        return String(decoding: data, as: UTF8.self)
+        let stderr = (try? String(contentsOf: errors, encoding: .utf8)) ?? ""
+        return (process.terminationStatus, String(decoding: data, as: UTF8.self), stderr)
     }
 }

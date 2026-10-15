@@ -31,6 +31,25 @@ public enum AnnotationPrompt {
             """
     }
 
+    /// The reply's shape as a JSON schema, for providers that enforce one (Ollama's `format`), so
+    /// small local models can't return broken JSON. Written as text because enforcement emits
+    /// properties in schema order (a dictionary's order changes every launch): `color` and `label`
+    /// come right after `match`, or models write coordinates first and never get to them.
+    public static let replySchema: String = {
+        func list(_ values: [String]) -> String { "[" + values.map { "\"\($0)\"" }.joined(separator: ",") + "]" }
+        let number = #"{"type":"number"}"#
+        return """
+            {"type":"array","items":{"type":"object","properties":{\
+            "type":{"type":"string","enum":\(list(Mark.Kind.allCases.map(\.rawValue)))},\
+            "match":{"type":"string"},\
+            "color":{"type":"string","enum":\(list(Palette.colors.map(\.name)))},\
+            "label":{"type":"string"},"size":\(number),"word":{"type":"boolean"},"anyCase":{"type":"boolean"},\
+            "x":\(number),"y":\(number),"w":\(number),"h":\(number),\
+            "points":{"type":"array","items":{"type":"array","items":\(number)}}},\
+            "required":["type"]}}
+            """
+    }()
+
     /// The marks in an AI reply: the outermost JSON array, ignoring any prose or code fences around it.
     public static func parseMarks(from reply: String) throws -> [Mark] {
         guard let start = reply.firstIndex(of: "["), let end = reply.lastIndex(of: "]"), start < end else {

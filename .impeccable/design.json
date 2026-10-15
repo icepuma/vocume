@@ -1,0 +1,320 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T19:12:26.797624+00:00",
+  "title": "Design System: Vocume",
+  "extensions": {
+    "colorMeta": {
+      "table-light": {
+        "role": "neutral",
+        "displayName": "Pale Table",
+        "canonical": "Color(red: 0.81, green: 0.81, blue: 0.82)"
+      },
+      "terminal-strip": {
+        "role": "neutral",
+        "displayName": "Terminal Strip",
+        "canonical": "Color(white: 0.1).opacity(0.92)"
+      },
+      "ink-red": {
+        "role": "secondary",
+        "displayName": "Ink Red",
+        "canonical": "#FF3B30"
+      },
+      "ink-orange": {
+        "role": "secondary",
+        "displayName": "Ink Orange",
+        "canonical": "#FF9500"
+      },
+      "ink-yellow": {
+        "role": "secondary",
+        "displayName": "Ink Yellow",
+        "canonical": "#FFCC00"
+      },
+      "ink-green": {
+        "role": "secondary",
+        "displayName": "Ink Green",
+        "canonical": "#34C759"
+      },
+      "ink-blue": {
+        "role": "secondary",
+        "displayName": "Ink Blue",
+        "canonical": "#007AFF"
+      },
+      "ink-purple": {
+        "role": "secondary",
+        "displayName": "Ink Purple",
+        "canonical": "Color(red: 0.69, green: 0.32, blue: 0.87)"
+      },
+      "ink-black": {
+        "role": "secondary",
+        "displayName": "Ink Black",
+        "canonical": "Color(white: 0.12)"
+      },
+      "ink-white": {
+        "role": "secondary",
+        "displayName": "Ink White",
+        "canonical": "#FFFFFF"
+      },
+      "rainbow-red": {
+        "role": "tertiary",
+        "displayName": "Rainbow Red",
+        "canonical": "#EB5F57"
+      },
+      "rainbow-orange": {
+        "role": "tertiary",
+        "displayName": "Rainbow Orange",
+        "canonical": "#F58B57"
+      },
+      "rainbow-yellow": {
+        "role": "tertiary",
+        "displayName": "Rainbow Yellow",
+        "canonical": "#FAC35F"
+      },
+      "rainbow-green": {
+        "role": "tertiary",
+        "displayName": "Rainbow Green",
+        "canonical": "#91C882"
+      },
+      "rainbow-blue": {
+        "role": "tertiary",
+        "displayName": "Rainbow Blue",
+        "canonical": "#82AADC"
+      },
+      "rainbow-indigo": {
+        "role": "tertiary",
+        "displayName": "Rainbow Indigo",
+        "canonical": "#9B82C8"
+      },
+      "rainbow-violet": {
+        "role": "tertiary",
+        "displayName": "Rainbow Violet",
+        "canonical": "#C882B4"
+      },
+      "shimmer-red": {
+        "role": "tertiary",
+        "displayName": "Shimmer Red",
+        "canonical": "#FA9B93"
+      },
+      "shimmer-orange": {
+        "role": "tertiary",
+        "displayName": "Shimmer Orange",
+        "canonical": "#FFB989"
+      },
+      "shimmer-yellow": {
+        "role": "tertiary",
+        "displayName": "Shimmer Yellow",
+        "canonical": "#FFE19B"
+      },
+      "shimmer-green": {
+        "role": "tertiary",
+        "displayName": "Shimmer Green",
+        "canonical": "#B9E6B4"
+      },
+      "shimmer-blue": {
+        "role": "tertiary",
+        "displayName": "Shimmer Blue",
+        "canonical": "#B4CDF0"
+      },
+      "shimmer-indigo": {
+        "role": "tertiary",
+        "displayName": "Shimmer Indigo",
+        "canonical": "#C3B4E6"
+      },
+      "shimmer-violet": {
+        "role": "tertiary",
+        "displayName": "Shimmer Violet",
+        "canonical": "#E6B4D2"
+      }
+    },
+    "dynamicColors": [
+      {
+        "name": "table-dark",
+        "canonical": "NSColor.underPageBackgroundColor",
+        "purpose": "Dark Mode table, with white 0.07 radial glow (r 40→620)."
+      },
+      {
+        "name": "system-accent",
+        "canonical": "Color.accentColor",
+        "purpose": "Selection and the primary action; follows the user's accent setting."
+      }
+    ],
+    "typographyMeta": {
+      "tool-glyph": {
+        "displayName": "Tool Glyph"
+      },
+      "prompt": {
+        "displayName": "Prompt"
+      },
+      "label": {
+        "displayName": "Label"
+      },
+      "progress": {
+        "displayName": "Progress"
+      },
+      "mark-label": {
+        "displayName": "Mark Label"
+      },
+      "step-number": {
+        "displayName": "Step Number"
+      }
+    },
+    "shadows": [
+      {
+        "name": "print-lift",
+        "value": "black 0.22 (light) / 0.55 (dark), radius 22, y 10",
+        "purpose": "The print on the table."
+      },
+      {
+        "name": "fallback-glass",
+        "value": "black 0.12, radius 12, y 4",
+        "purpose": "macOS 15 regular-material glass only."
+      },
+      {
+        "name": "selected-tile",
+        "value": "accent 0.35, radius 5, y 2",
+        "purpose": "Selected tool tile."
+      },
+      {
+        "name": "mark-ink",
+        "value": "black 0.35, radius 3×unit, y 1×unit",
+        "purpose": "Marks drawn on the print."
+      }
+    ],
+    "motion": [
+      {
+        "name": "rail-snap",
+        "value": ".snappy(duration: 0.18)",
+        "purpose": "Tool and ink selection; nil under Reduce Motion."
+      },
+      {
+        "name": "composer-snap",
+        "value": ".snappy(duration: 0.22)",
+        "purpose": "Idle↔busy crossfade and error note; nil under Reduce Motion."
+      },
+      {
+        "name": "toast",
+        "value": "move(edge: .top) + opacity; opacity under Reduce Motion",
+        "purpose": "Copy/Save confirmation."
+      },
+      {
+        "name": "glimmer",
+        "value": "1 char / 50 ms, 3-char band, stepped on 64 ms tick",
+        "purpose": "AI progress text; parked off-screen under Reduce Motion."
+      },
+      {
+        "name": "rainbow-rule",
+        "value": "colour index + t/150 ms, ~9pt segments, 2pt stroke",
+        "purpose": "Busy capsule border; paused under Reduce Motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "window-min",
+        "value": "860×640pt"
+      },
+      {
+        "name": "window-default",
+        "value": "1180×820pt"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tool Rail",
+      "kind": "nav",
+      "refersTo": "tool-rail",
+      "description": "Leading glass pen tray: tools, ink well, nibs.",
+      "html": "<div class=\"ds-rail\"><button class=\"ds-tool\">&#8598;</button><button class=\"ds-tool is-sel\">&#8599;<span class=\"ds-lead\"></span></button><button class=\"ds-tool\">&#9645;</button><hr class=\"ds-sep\"><div class=\"ds-well\"><button class=\"ds-swatch is-sel\" style=\"--c:#FF3B30\" aria-label=\"red\"></button><button class=\"ds-swatch\" style=\"--c:#FF9500\" aria-label=\"orange\"></button><button class=\"ds-swatch\" style=\"--c:#FFCC00\" aria-label=\"yellow\"></button><button class=\"ds-swatch\" style=\"--c:#34C759\" aria-label=\"green\"></button><button class=\"ds-swatch\" style=\"--c:#007AFF\" aria-label=\"blue\"></button><button class=\"ds-swatch\" style=\"--c:#B052DE\" aria-label=\"purple\"></button><button class=\"ds-swatch\" style=\"--c:#1F1F1F\" aria-label=\"black\"></button><button class=\"ds-swatch\" style=\"--c:#FFFFFF\" aria-label=\"white\"></button></div><hr class=\"ds-sep\"><button class=\"ds-nib\"><i style=\"width:5px;height:5px\"></i></button><button class=\"ds-nib is-sel\"><i style=\"width:8px;height:8px\"></i></button><button class=\"ds-nib\"><i style=\"width:11px;height:11px\"></i></button></div>",
+      "css": ".ds-rail{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:6px;border-radius:18px;background: rgba(246,246,248,0.72); backdrop-filter: blur(20px) saturate(1.6); border: 0.5px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.12);} .ds-tool{position:relative;width:34px;height:34px;border:0;border-radius:10px;background:transparent;color:#1d1d1f;font-size:15px;font-weight:500;transition:background .18s,color .18s} .ds-tool:hover{background:rgba(0,0,0,0.05)} .ds-tool:focus-visible{outline:2px solid #007AFF;outline-offset:1px} .ds-tool.is-sel{background:#007AFF;color:#fff;box-shadow:0 2px 5px rgba(0,122,255,0.35)} .ds-lead{position:absolute;left:9px;bottom:3px;width:16px;height:4px;border-radius:2px;background:#FF3B30;box-shadow:0 0 0 1px rgba(255,255,255,0.9)} .ds-sep{width:24px;border:0;border-top:0.5px solid rgba(0,0,0,0.15);margin:6px 0} .ds-well{display:grid;grid-template-columns:repeat(2,20px);gap:4px;padding:2px 0} .ds-swatch{width:20px;height:20px;padding:0;border-radius:50%;border:2px solid transparent;background:var(--c);background-clip:content-box;box-shadow:inset 0 0 0 2px #f6f6f8} .ds-swatch.is-sel{border-color:#007AFF} .ds-swatch:focus-visible{outline:2px solid #007AFF} .ds-nib{width:34px;height:24px;border:0;background:transparent;display:grid;place-items:center} .ds-nib i{border-radius:50%;background:rgba(0,0,0,0.55)} .ds-nib.is-sel i{background:#007AFF}"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "Bottom glass capsule: model menu, prompt, Annotate.",
+      "html": "<div class=\"ds-composer\"><button class=\"ds-model\">&#10022; Claude</button><span class=\"ds-div\"></span><input class=\"ds-prompt\" placeholder=\"Describe the markup — “redact every email”\"><button class=\"ds-annotate\" aria-label=\"Annotate\">&#8593;</button></div>",
+      "css": ".ds-composer{display:flex;align-items:center;gap:10px;height:46px;max-width:720px;padding:0 6px 0 8px;border-radius:999px;background: rgba(246,246,248,0.72); backdrop-filter: blur(20px) saturate(1.6); border: 0.5px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.12);font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;} .ds-model{border:0;background:transparent;font-size:13px;color:#1d1d1f} .ds-div{width:1px;height:20px;background:rgba(0,0,0,0.15)} .ds-prompt{flex:1;border:0;background:transparent;font-size:14px;outline:none} .ds-annotate{width:34px;height:30px;border:0;border-radius:999px;background:#007AFF;color:#fff;font-size:14px;font-weight:600;transition:filter .18s} .ds-annotate:hover{filter:brightness(1.08)} .ds-annotate:focus-visible{outline:2px solid #007AFF;outline-offset:2px}"
+    },
+    {
+      "name": "Composer (busy)",
+      "kind": "custom",
+      "refersTo": "composer-busy",
+      "description": "The capsule as a dark terminal strip with Claude Code's rainbow progress and rainbow rule.",
+      "html": "<div class=\"ds-busy\"><span style=\"color:#EB5F57\">&#10022;</span><span class=\"ds-stage\"><b style=\"color:#EB5F57\">R</b><b style=\"color:#F58B57\">e</b><b style=\"color:#FFE19B\">a</b><b style=\"color:#B9E6B4\">d</b><b style=\"color:#B4CDF0\">i</b><b style=\"color:#9B82C8\">n</b><b style=\"color:#C882B4\">g</b><b style=\"color:#EB5F57\">…</b></span><span class=\"ds-time\">2.4s</span><button class=\"ds-cancel\">Cancel</button></div>",
+      "css": ".ds-busy{display:flex;align-items:center;gap:10px;height:46px;max-width:720px;padding:0 6px 0 16px;border-radius:999px;background:rgba(26,26,26,0.92);border:2px solid transparent;background-image:linear-gradient(rgba(26,26,26,0.92),rgba(26,26,26,0.92)),linear-gradient(90deg,#EB5F57,#F58B57,#FAC35F,#91C882,#82AADC,#9B82C8,#C882B4);background-origin:border-box;background-clip:padding-box,border-box;font:600 13px ui-monospace,'SF Mono',monospace} .ds-stage{flex:1} .ds-stage b{font-weight:600} .ds-time{color:rgba(255,255,255,0.55);font-variant-numeric:tabular-nums} .ds-cancel{border:0;border-radius:999px;padding:5px 12px;background:rgba(255,255,255,0.14);color:#fff;font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;font-size:13px} .ds-cancel:hover{background:rgba(255,255,255,0.22)} .ds-cancel:focus-visible{outline:2px solid #007AFF}"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "Top-centre glass capsule confirming Copy or Save.",
+      "html": "<div class=\"ds-toast\"><span class=\"ds-check\">&#10003;</span> Copied to clipboard</div>",
+      "css": ".ds-toast{display:inline-flex;gap:6px;align-items:center;padding:8px 14px;border-radius:999px;background: rgba(246,246,248,0.72); backdrop-filter: blur(20px) saturate(1.6); border: 0.5px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.12);font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;font-size:13px;font-weight:500;color:#1d1d1f} .ds-check{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:#1d1d1f;color:#fff;font-size:10px}"
+    },
+    {
+      "name": "Error Note",
+      "kind": "card",
+      "refersTo": "error-note",
+      "description": "Glass note above the composer when a request fails.",
+      "html": "<div class=\"ds-error\"><span class=\"ds-warn\">&#9650;</span><span class=\"ds-msg\">Claude Code is not signed in.</span><button class=\"ds-dismiss\" aria-label=\"Dismiss\">&#10005;</button></div>",
+      "css": ".ds-error{display:flex;gap:8px;align-items:baseline;max-width:720px;padding:10px 14px;border-radius:14px;background: rgba(246,246,248,0.72); backdrop-filter: blur(20px) saturate(1.6); border: 0.5px solid rgba(0,0,0,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.12);font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;font-size:13px;color:#1d1d1f} .ds-warn{color:#FF9500} .ds-msg{flex:1} .ds-dismiss{border:0;background:transparent;color:rgba(0,0,0,0.5)} .ds-dismiss:hover{color:#1d1d1f} .ds-dismiss:focus-visible{outline:2px solid #007AFF}"
+    },
+    {
+      "name": "Print on Table",
+      "kind": "card",
+      "refersTo": "print",
+      "description": "The screenshot on the lit table: hairline edge, lift shadow.",
+      "html": "<div class=\"ds-table\"><div class=\"ds-print\"></div></div>",
+      "css": ".ds-table{padding:28px;background:radial-gradient(circle at center,rgba(255,255,255,0.25),transparent 620px),#CFCFD1} .ds-print{height:140px;border-radius:3px;background:#fff;border:0.5px solid rgba(0,0,0,0.1);box-shadow:0 10px 22px rgba(0,0,0,0.22)}"
+    },
+    {
+      "name": "Save Button (macOS 15)",
+      "kind": "button",
+      "refersTo": "toolbar-save",
+      "description": "Prominent toolbar Save; on macOS 26 the system draws it as a standard item.",
+      "html": "<button class=\"ds-save\">Save</button>",
+      "css": ".ds-save{border:0;border-radius:6px;padding:4px 12px;background:#007AFF;color:#fff;font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;font-size:13px;font-weight:500} .ds-save:hover{filter:brightness(1.08)} .ds-save:focus-visible{outline:2px solid #007AFF;outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Light Table",
+    "overview": "The screenshot is a print laid on a lit table. The table is a quiet grey ground, lit from beneath the print so the eye goes to the work. Tools rest at the table's edge in a pen tray and disappear into the task. The one place the app raises its voice is AI progress, which borrows Claude Code's terminal rainbow so a running request is unmistakable.\n\nEverything else is native macOS: SF Symbols, the system font, system accent, system materials, a unified toolbar fused with the titlebar. Density is low; the print takes the window, the controls take its edges. State restyles in place: selection, ink, nib and AI progress never move or reflow anything.\n\nThe system refuses the category default of a dense Preview-style toolbar strip, and it refuses glass on glass.",
+    "keyCharacteristics": [
+      "Graphite or pale-grey table, radial under-light, the print centred and fit with a hairline edge and a soft lift shadow.",
+      "Exactly one glass layer above the print: rail, composer capsule, toast, error note.",
+      "System accent marks selection; the eight mark inks show only as inks (swatches, the ink lead, marks).",
+      "Monospaced rainbow only for AI progress, on a dark terminal strip in both appearances.",
+      "Snappy, short motion (0.18–0.22 s) with Reduce Motion fallbacks everywhere."
+    ],
+    "rules": [
+      {
+        "name": "The Accent Is Selection Rule",
+        "body": "System accent means \"this is chosen\" or \"this is the primary action\". It never decorates.",
+        "section": "colors"
+      },
+      {
+        "name": "The Rainbow Belongs To AI Rule",
+        "body": "The terminal rainbow appears only while a request runs, only inside the composer.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Ply Rule",
+        "body": "Exactly one glass layer floats over the print, through `floatingGlass(in:)`: Liquid Glass `.regular` on macOS 26, `.regularMaterial` + 0.5pt hairline + fallback shadow on macOS 15. Never glass on glass: controls inside glass use solid fills (the Annotate button is `.borderedProminent`, not glass).",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do route every floating surface through `floatingGlass(in:)` and every bottom bar through `floatingBottomBar`.",
+      "Do gate Liquid Glass and other macOS 26 API behind `#available(macOS 26, *)` with a macOS 15 fallback.",
+      "Do use system accent for selection and the primary action, and `Palette` inks only for marks and their previews.",
+      "Do give every animation a Reduce Motion path (nil animation, opacity transition, or paused timeline).",
+      "Do use `ObservableObject` / `@Published` and plain property wrappers; the app builds with the Command Line Tools only, so no SwiftUI macros (`@Observable`, `#Preview`)."
+    ],
+    "donts": [
+      "Don't put glass inside glass; controls inside a glass surface use solid or bordered fills.",
+      "Don't use the terminal rainbow or monospaced type outside AI progress.",
+      "Don't let selection, ink, nib or busy state change layout.",
+      "Don't put rare or destructive actions (Delete, Clear All) in the toolbar or rail.",
+      "Don't add a Preview-style horizontal tool strip; tools live in the leading rail."
+    ]
+  }
+}

@@ -1,161 +1,139 @@
 import SwiftUI
 import VocumeCore
 
-/// The editor window: tool bar, the screenshot with its marks, and the AI prompt bar.
+/// The editor window: the screenshot laid on a lit table like a print, the tools and ink in the
+/// toolbar beside Undo / Copy / Save, and the AI capsule floating at the bottom.
 struct EditorView: View {
     @ObservedObject var model: EditorModel
+    @ObservedObject var settings = AISettings.shared
     @FocusState private var labelFieldFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolBar
-            Divider()
-            ZStack {
-                Color(nsColor: .underPageBackgroundColor)
-                Image(nsImage: model.image).resizable().aspectRatio(contentMode: .fit)
-                    .overlay { GeometryReader { geometry in canvas(geometry.size) } }
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .shadow(color: .black.opacity(0.25), radius: 18, y: 6)
-                    .padding(28)
+        print
+            .padding(28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .floatingBottomBar {
+                if settings.isEnabled { Composer(model: model) }
             }
-            .overlay(alignment: .top) { toastView }
-            .animation(.spring(duration: 0.3), value: model.toast)
-            Divider()
-            aiBar
-        }
-        .frame(minWidth: 820, minHeight: 540)
+            .overlay(alignment: .top) { toastView.padding(.top, 14) }
+            .animation(reduceMotion ? nil : .spring(duration: 0.3), value: model.toast)
+            .background { table.ignoresSafeArea() }
+            .toolbar { toolbarContent }
+            .navigationTitle(model.url.lastPathComponent)
+            .navigationSubtitle(pixelSize)
+            .frame(minWidth: 860, minHeight: 640)
     }
 
-    @ViewBuilder private var toastView: some View {
+    // MARK: The table
+
+    /// The light table, lit from beneath the print so the eye goes to the work.
+    private var table: some View {
+        // Dark: the system's graphite under-page grey. Light: a lighter table than the system's
+        // mid-grey, so the window doesn't read as a dim slab under a light titlebar.
+        (colorScheme == .dark ? Color(nsColor: .underPageBackgroundColor) : Color(red: 0.81, green: 0.81, blue: 0.82))
+            .overlay {
+                RadialGradient(
+                    colors: [Color.white.opacity(colorScheme == .dark ? 0.07 : 0.25), .clear],
+                    center: .center,
+                    startRadius: 40,
+                    endRadius: 620
+                )
+            }
+    }
+
+    /// The screenshot as a print resting on the table: a hairline edge and a soft lift shadow.
+    private var print: some View {
+        Image(nsImage: model.image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .overlay { GeometryReader { geometry in canvas(geometry.size) } }
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(Color.primary.opacity(colorScheme == .dark ? 0.18 : 0.1), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.55 : 0.22), radius: 22, y: 10)
+            .contextMenu { canvasMenu }
+    }
+
+    private var pixelSize: String {
+        guard let rep = model.image.representations.first, rep.pixelsWide > 0 else { return "" }
+        return "\(rep.pixelsWide) × \(rep.pixelsHigh) px"
+    }
+
+    // MARK: Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Picker("Tool", selection: Binding(get: { model.tool }, set: { model.setTool($0) })) {
+                ForEach(Tool.allCases, id: \.self) { tool in
+                    Label(tool.title, systemImage: tool.icon).tag(tool)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelStyle(.iconOnly)
+            .help("Tools: V A R H X P T N")
+        }
+        ToolbarItem(placement: .principal) {
+            InkButton(model: model)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button("Undo", systemImage: "arrow.uturn.backward", action: model.undo)
+                .disabled(model.undoStack.isEmpty)
+                .help("Undo  ⌘Z")
+        }
+        if #available(macOS 26, *) {
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button("Copy", systemImage: "doc.on.doc", action: model.copyImage)
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .help("Copy the annotated image  ⇧⌘C")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                model.save()
+            } label: {
+                Label("Save", systemImage: "square.and.arrow.down").labelStyle(.titleOnly)
+            }
+            // Accent-filled on macOS 15. On macOS 26+ the bridged toolbar item stays a standard item:
+            // neither this, `.glassProminent`, `.confirmationAction` nor AppKit's `style = .prominent`
+            // changes how the system draws it there.
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut("s")
+            .help("Save the annotated image  ⌘S")
+        }
+    }
+
+    @ViewBuilder
+    private var canvasMenu: some View {
+        Button("Delete Mark", systemImage: "trash", action: model.deleteSelected)
+            .disabled(model.selected == nil)
+        Button("Clear All Marks", systemImage: "xmark.bin", action: model.clear)
+            .disabled(model.marks.isEmpty)
+        Divider()
+        Button("Copy Image", systemImage: "doc.on.doc", action: model.copyImage)
+        Button("Save…", systemImage: "square.and.arrow.down") { model.save() }
+    }
+
+    // MARK: Feedback
+
+    @ViewBuilder
+    private var toastView: some View {
         if let toast = model.toast {
             Label(toast, systemImage: "checkmark.circle.fill")
                 .font(.callout.weight(.medium))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(.regularMaterial, in: Capsule())
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
-                .padding(.top, 14)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .floatingGlass(in: Capsule())
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
     }
 
-    private var toolBar: some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 2) {
-                ForEach(Tool.allCases, id: \.self) { tool in
-                    Button {
-                        model.setTool(tool)
-                    } label: {
-                        Image(systemName: tool.icon)
-                            .font(.system(size: 14, weight: .medium))
-                            .frame(width: 32, height: 28)
-                            .foregroundStyle(model.tool == tool ? Color.accentColor : .primary)
-                            .background(
-                                model.tool == tool ? Color.accentColor.opacity(0.18) : .clear,
-                                in: RoundedRectangle(cornerRadius: 6)
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help("\(tool.rawValue.capitalized)  \(tool.key.uppercased())")
-                }
-            }
-            .padding(3)
-            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
-
-            HStack(spacing: 4) {
-                ForEach(Palette.colors, id: \.name) { entry in
-                    Circle().fill(entry.color)
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.2)))
-                        .frame(width: 16, height: 16)
-                        .padding(3)
-                        .overlay(
-                            Circle().strokeBorder(
-                                model.colorName == entry.name ? Color.accentColor : .clear, lineWidth: 2)
-                        )
-                        .contentShape(Circle())
-                        .onTapGesture { model.setColor(entry.name) }
-                        .help(entry.name.capitalized)
-                }
-            }
-
-            Picker("Size", selection: Binding(get: { model.size }, set: { model.setSize($0) })) {
-                Text("S").tag(0.6)
-                Text("M").tag(1.0)
-                Text("L").tag(1.6)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 96)
-            .help("Size")
-
-            Spacer()
-
-            HStack(spacing: 12) {
-                Button("Undo", systemImage: "arrow.uturn.backward") { model.undo() }
-                    .help("Undo  ⌘Z")
-                    .disabled(model.undoStack.isEmpty)
-                Button("Delete", systemImage: "trash") { model.deleteSelected() }
-                    .help("Delete selected  ⌫")
-                    .disabled(model.selected == nil)
-                Button("Clear All", systemImage: "xmark.bin") { model.clear() }
-                    .help("Clear all")
-                    .disabled(model.marks.isEmpty)
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-            .imageScale(.large)
-
-            HStack(spacing: 8) {
-                Button("Copy", systemImage: "doc.on.doc") { model.copyImage() }
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
-                    .help("Copy annotated image  ⇧⌘C")
-                Button("Save", systemImage: "square.and.arrow.down") { model.save() }
-                    .keyboardShortcut("s")
-                    .buttonStyle(.borderedProminent)
-                    .help("Save annotated image  ⌘S")
-            }
-            .controlSize(.large)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.bar)
-    }
-
-    private var aiBar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !model.error.isEmpty {
-                Text(model.error).font(.caption).foregroundStyle(.red).lineLimit(3).textSelection(.enabled)
-            }
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles").foregroundStyle(.purple).imageScale(.large)
-                Picker("Model", selection: $model.backend) {
-                    ForEach(AIBackend.allCases) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
-                .fixedSize()
-                .disabled(model.isBusy)
-                HStack(spacing: 10) {
-                    TextField("Ask AI to annotate, e.g. “point out UI bugs”", text: $model.prompt)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(model.askAI)
-                    Button("Annotate", action: model.askAI)
-                }
-                .disabled(model.isBusy)
-                .overlay {
-                    if model.isBusy {
-                        ThinkingOverlay(stage: model.stage, since: model.busySince)
-                            .padding(-2)
-                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                    }
-                }
-                .animation(.spring(duration: 0.4), value: model.isBusy)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.bar)
-    }
+    // MARK: Canvas
 
     private func canvas(_ size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
@@ -175,6 +153,8 @@ struct EditorView: View {
                 labelField(for: mark, in: size)
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Screenshot, \(model.marks.count) \(model.marks.count == 1 ? "mark" : "marks")")
     }
 
     /// An inline text field over the mark's label pill, styled like the pill.

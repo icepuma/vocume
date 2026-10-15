@@ -29,6 +29,11 @@ final class ClaudeSession: Sendable {
     }
 
     deinit {
+        cancel()
+    }
+
+    /// Stops the process; a pending `ask` then fails, and its result is discarded by the caller.
+    func cancel() {
         if process.isRunning { process.terminate() }
     }
 

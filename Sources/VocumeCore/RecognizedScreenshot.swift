@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import Vision
 
 /// A screenshot's OCR text plus its pixels, used to place AI marks on exact words and letters.
@@ -10,24 +11,64 @@ public struct RecognizedScreenshot: Sendable {
     struct Line: Sendable {
         let text: String
         let box: CGRect
+        /// Vision's box per whitespace-separated word, same space as `box`. A few pixels loose, but
+        /// unlike the line box they follow words set in a different font size.
+        var wordBoxes: [CGRect] = []
     }
 
     let lines: [Line]
     let pixels: Pixels
 
     /// Runs on-device text recognition; `nil` if the image can't be read.
+    ///
+    /// Recognition runs twice. At 2× Vision reads small text exactly, also where a line mixes font
+    /// sizes (at 1× it misreads the smaller words), so those lines win; the 1× pass adds any line the
+    /// 2× pass missed, since Vision's detection of tiny isolated labels is erratic at either size.
     public init?(contentsOf url: URL) {
-        guard let pixels = Pixels(contentsOf: url) else { return nil }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+            let pixels = Pixels(image)
+        else { return nil }
+        let doubled = Self.doubled(image).map(Self.recognize) ?? []
+        let single = Self.recognize(image).filter { line in
+            let area = line.box.width * line.box.height
+            let covered = doubled.reduce(0) { sum, other in
+                let overlap = other.box.intersection(line.box)
+                return overlap.isNull ? sum : sum + overlap.width * overlap.height
+            }
+            return covered < area * 0.3
+        }
+        lines = doubled + single
+        self.pixels = pixels
+    }
+
+    private static func recognize(_ image: CGImage) -> [Line] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         // Correction would "fix" code and identifiers, so matches would no longer fit the pixels.
         request.usesLanguageCorrection = false
-        try? VNImageRequestHandler(url: url).perform([request])
-        lines = (request.results ?? []).compactMap { observation in
-            guard let text = observation.topCandidates(1).first, let box = text.lineBox else { return nil }
-            return Line(text: text.string, box: box)
+        try? VNImageRequestHandler(cgImage: image).perform([request])
+        return (request.results ?? []).compactMap { observation in
+            guard let text = observation.topCandidates(1).first,
+                let box = text.box(for: text.string.startIndex..<text.string.endIndex)
+            else { return nil }
+            let words = text.string.split(whereSeparator: \.isWhitespace).compactMap {
+                text.box(for: $0.startIndex..<$0.endIndex)
+            }
+            return Line(text: text.string, box: box, wordBoxes: words)
         }
-        self.pixels = pixels
+    }
+
+    /// The image at twice the size, up to 8 megapixels (the copy then stays under ~130 MB).
+    private static func doubled(_ image: CGImage) -> CGImage? {
+        guard image.width * image.height <= 8_000_000,
+            let context = CGContext(
+                data: nil, width: image.width * 2, height: image.height * 2, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width * 2, height: image.height * 2))
+        return context.makeImage()
     }
 
     init(lines: [Line], pixels: Pixels) {
@@ -44,7 +85,8 @@ public struct RecognizedScreenshot: Sendable {
     }
 
     /// Replaces every mark that has a `match` with one positioned mark per occurrence of that text.
-    /// Marks without `match` pass through unchanged.
+    /// Marks without `match` pass through unchanged. Models often repeat a match once per occurrence
+    /// they see; each already covers every occurrence, so identical results are kept once.
     public func resolve(_ marks: [Mark]) -> [Mark] {
         guard marks.contains(where: { $0.match != nil }) else { return marks }
         let measured = lines.map { TextLine($0, pixels: pixels) }
@@ -58,6 +100,12 @@ public struct RecognizedScreenshot: Sendable {
                 regex.matches(in: line.text, range: NSRange(line.text.startIndex..., in: line.text))
                     .compactMap { Range($0.range, in: line.text) }
                     .map { mark.placed(on: line.locate($0, pixels: pixels), pixels: pixels) }
+            }
+        }.reduce(into: []) { kept, mark in
+            if !kept.contains(where: {
+                var other = $0; other.id = mark.id; return other == mark
+            }) {
+                kept.append(mark)
             }
         }
     }
