@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   check:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
@@ -30,7 +30,7 @@ jobs:
 
   build:
     needs: check
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:

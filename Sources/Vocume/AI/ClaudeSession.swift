@@ -6,7 +6,7 @@ import VocumeCore
 /// Starting it when the editor opens hides about a second of CLI startup without costing quality.
 /// `--safe-mode` skips plugins, hooks and MCP servers but keeps the subscription login (`--bare`
 /// would need an API key). The image is sent inline, so Claude needs no tools and no extra turn.
-final class ClaudeSession {
+final class ClaudeSession: Sendable {
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()

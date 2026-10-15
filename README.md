@@ -40,7 +40,7 @@ make check                # lint, build and test (what CI runs)
 VERSION=0.1.0 make dmg    # → build/Vocume.app and build/Vocume-0.1.0.dmg
 ```
 
-Needs only the Xcode Command Line Tools (`xcode-select --install`). Contributor notes are in [AGENTS.md](AGENTS.md).
+Needs only the Xcode Command Line Tools with Swift 6.2 or later (`xcode-select --install`). Contributor notes are in [AGENTS.md](AGENTS.md).
 
 ## Releasing
 

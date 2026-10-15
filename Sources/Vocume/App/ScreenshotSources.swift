@@ -2,7 +2,7 @@ import AppKit
 
 /// Notices new screenshots: PNGs appearing in the system screenshot folder, and images put on the
 /// clipboard (screenshots set to "Clipboard" never touch disk).
-final class ScreenshotSources {
+@MainActor final class ScreenshotSources {
     /// Marks Vocume's own clipboard writes, so copying an annotated image doesn't reopen it.
     static let ownPasteboardType = NSPasteboard.PasteboardType("dev.icepuma.vocume")
     /// File names Vocume saved itself, so the folder watcher skips them.
@@ -27,12 +27,13 @@ final class ScreenshotSources {
         source.setEventHandler { [weak self] in self?.scanFolder() }
         source.resume()
         folderSource = source
+        // Scheduled on the main run loop, so it fires on the main actor.
         clipboardTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            self?.checkClipboard()
+            MainActor.assumeIsolated { self?.checkClipboard() }
         }
     }
 
-    deinit {
+    isolated deinit {
         folderSource?.cancel()
         clipboardTimer?.invalidate()
     }

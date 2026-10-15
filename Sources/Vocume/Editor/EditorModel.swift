@@ -6,7 +6,7 @@ import VocumeCore
 ///
 /// `ObservableObject` rather than `@Observable`/`@State`: those are macros, and the Command Line
 /// Tools ship without the SwiftUI macro plugin, so the app must build without them.
-final class EditorModel: ObservableObject {
+@MainActor final class EditorModel: ObservableObject {
     let url: URL
     let image: NSImage
     weak var window: NSWindow?
@@ -49,7 +49,7 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    deinit {
+    isolated deinit {
         keyMonitor.map(NSEvent.removeMonitor)
     }
 
@@ -272,7 +272,7 @@ final class EditorModel: ObservableObject {
     // MARK: Export
 
     /// The image with all marks, at the image's full pixel size, as PNG.
-    @MainActor func renderedPNG() -> Data? {
+    func renderedPNG() -> Data? {
         let rep = image.representations.first
         let width = CGFloat(rep.map(\.pixelsWide).flatMap { $0 > 0 ? $0 : nil } ?? Int(image.size.width))
         let height = CGFloat(rep.map(\.pixelsHigh).flatMap { $0 > 0 ? $0 : nil } ?? Int(image.size.height))
@@ -286,7 +286,7 @@ final class EditorModel: ObservableObject {
         return NSBitmapImageRep(cgImage: cgImage).representation(using: .png, properties: [:])
     }
 
-    @MainActor func copyImage() {
+    func copyImage() {
         guard let png = renderedPNG() else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -295,7 +295,7 @@ final class EditorModel: ObservableObject {
         flash("Copied to clipboard")
     }
 
-    @MainActor func save() {
+    func save() {
         guard let png = renderedPNG(), let window else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]

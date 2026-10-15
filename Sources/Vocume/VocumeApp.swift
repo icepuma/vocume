@@ -1,7 +1,7 @@
 import AppKit
 
 @main
-enum VocumeApp {
+@MainActor enum VocumeApp {
     static func main() {
         signal(SIGPIPE, SIG_IGN)  // a CLI exiting mid-write should be an error, not a crash
         let app = NSApplication.shared

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
@@ -17,8 +17,7 @@ let package = Package(
         .executableTarget(
             name: "Vocume",
             dependencies: ["VocumeCore"],
-            // Swift 5 mode until the AppKit/process glue is migrated to strict concurrency.
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "VocumeCoreTests",
