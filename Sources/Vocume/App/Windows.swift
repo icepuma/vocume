@@ -23,6 +23,31 @@ import SwiftUI
         return editors[ObjectIdentifier(window)]?.model
     }
 
+    // Edit ▸ Undo / Redo (⌘Z, ⇧⌘Z). Typing in a field undoes the typing first; once the text has
+    // nothing left to undo (or the prompt merely has the cursor), they undo and redo marks. Text and
+    // marks keep separate histories, so redo goes to whichever was undone last.
+    private var lastUndoneText = false
+
+    func undo() {
+        if let text = NSApp.keyWindow?.firstResponder as? NSTextView, text.undoManager?.canUndo == true {
+            text.undoManager?.undo()
+            lastUndoneText = true
+        } else {
+            keyEditor?.undo()
+            lastUndoneText = false
+        }
+    }
+
+    func redo() {
+        let text = NSApp.keyWindow?.firstResponder as? NSTextView
+        let canRedoMarks = keyEditor?.redoStack.isEmpty == false
+        if let text, text.undoManager?.canRedo == true, lastUndoneText || !canRedoMarks {
+            text.undoManager?.redo()
+        } else {
+            keyEditor?.redo()
+        }
+    }
+
     // MARK: Editors
 
     func openEditor(for url: URL) {

@@ -76,21 +76,8 @@ import UniformTypeIdentifiers
     // Editor commands, routed to the editor in front.
     @objc private func saveImage() { Windows.shared.keyEditor?.save() }
     @objc private func copyImage() { Windows.shared.keyEditor?.copyImage() }
-    // While a text field has the cursor, undo and redo belong to its text.
-    @objc private func undoMark() {
-        if let text = NSApp.keyWindow?.firstResponder as? NSTextView {
-            text.undoManager?.undo()
-        } else {
-            Windows.shared.keyEditor?.undo()
-        }
-    }
-    @objc private func redoMark() {
-        if let text = NSApp.keyWindow?.firstResponder as? NSTextView {
-            text.undoManager?.redo()
-        } else {
-            Windows.shared.keyEditor?.redo()
-        }
-    }
+    @objc private func undoMark() { Windows.shared.undo() }
+    @objc private func redoMark() { Windows.shared.redo() }
     @objc private func openHelp() {
         NSWorkspace.shared.open(URL(string: "https://github.com/icepuma/vocume#readme")!)
     }

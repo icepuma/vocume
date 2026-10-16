@@ -65,6 +65,12 @@ private struct RenderedText {
     func pixelX(_ fraction: Double) -> Double { fraction * Double(image.width) }
 }
 
+/// Whether Vision reads text on this machine. GitHub's macOS 27 runner returns nothing (its virtual
+/// machine can't run the recognizer), so the end-to-end OCR tests skip there; they run on real Macs.
+@MainActor private func visionReadsText() -> Bool {
+    (try? RenderedText("Vision check", font: .systemFont(ofSize: 48)).recognized())?.lines.isEmpty == false
+}
+
 @Suite("Text matching")
 @MainActor
 struct TextMatchingTests {
@@ -164,7 +170,8 @@ struct TextMatchingTests {
     }
 
     /// End to end with real Vision text recognition.
-    @Test func recognizesTextInAnImageFile() throws {
+    @Test(.enabled("needs on-device text recognition") { await visionReadsText() })
+    func recognizesTextInAnImageFile() throws {
         let rendered = RenderedText("Vocume reads every word", font: .systemFont(ofSize: 48))
         let screenshot = try rendered.recognized()
         #expect(screenshot.textSummary.contains("Vocume reads every word"))
@@ -174,7 +181,8 @@ struct TextMatchingTests {
 
     /// A small label and large text that Vision reads as one line, like a log prefix: each word
     /// must be found in its own font size.
-    @Test func mixedFontSizesInOneLine() throws {
+    @Test(.enabled("needs on-device text recognition") { await visionReadsText() })
+    func mixedFontSizesInOneLine() throws {
         let text = NSMutableAttributedString(
             string: "jev-model-router   ",
             attributes: [.font: NSFont.systemFont(ofSize: 20), .foregroundColor: NSColor.gray])
