@@ -50,7 +50,8 @@ struct GeneralPane: View {
     var body: some View {
         Form {
             Section {
-                Toggle(isOn: Binding(get: { login.isOn }, set: login.set)) {
+                // A closure, not `set: login.set`: Swift 6.3 crashes converting the method itself.
+                Toggle(isOn: Binding(get: { login.isOn }, set: { login.set($0) })) {
                     Text("Open at Login")
                     Text("Vocume waits in the menu bar, ready for your capture shortcuts.")
                 }
