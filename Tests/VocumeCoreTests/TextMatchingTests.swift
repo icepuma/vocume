@@ -173,6 +173,161 @@ struct TextMatchingTests {
         #expect(rendered.pixelX(mark.x + (mark.w ?? 0)) >= target.upperBound - 1, "covers the last letter")
     }
 
+    /// "Redact all numbers": the AI sends one pattern and the app finds every number itself.
+    @Test func patternMarksEveryMatch() throws {
+        let rendered = RenderedText("Xcode 27.0 ships Swift 6.4 in 2026")
+        let reply = try AnnotationPrompt.parseMarks(from: #"[{"type":"redact","pattern":"\\d+(?:[.,]\\d+)*"}]"#)
+        let marks = rendered.screenshot.resolve(reply)
+        try #require(marks.count == 3)
+        for (mark, number) in zip(marks.sorted { $0.x < $1.x }, ["27.0", "6.4", "2026"]) {
+            let span = rendered.span(of: rendered.text.range(of: number)!)
+            #expect(span.contains(rendered.pixelX(mark.x + (mark.w ?? 0) / 2)), "covers \(number)")
+            #expect(mark.pattern == nil && mark.kind == .redact)
+        }
+        #expect(rendered.screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, pattern: "(")]).isEmpty, "invalid")
+    }
+
+    /// "Redact all numbers" through a detector: each token is covered whole, so "v0.5.3" can't leave
+    /// "v0." showing.
+    @Test func detectorRedactsWholeTokens() throws {
+        let rendered = RenderedText("release v0.5.3 and 27.0 today")
+        let marks = rendered.screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, detect: "numbers")])
+            .sorted { $0.x < $1.x }
+        try #require(marks.count == 2)
+        let version = rendered.span(of: rendered.text.range(of: "v0.5.3")!)
+        #expect(rendered.pixelX(marks[0].x) <= version.lowerBound + 1, "covers the v")
+        #expect(rendered.pixelX(marks[0].x + (marks[0].w ?? 0)) >= version.upperBound - 1)
+        #expect(marks.allSatisfy { $0.detect == nil })
+    }
+
+    /// "Redact all red text": the ink colour of each word decides, not the AI.
+    @Test func colorDetectorFindsRedWords() throws {
+        let text = NSMutableAttributedString(
+            string: "keep this ", attributes: [.font: NSFont.systemFont(ofSize: 40), .foregroundColor: NSColor.black])
+        text.append(
+            NSAttributedString(
+                string: "secret",
+                attributes: [.font: NSFont.systemFont(ofSize: 40), .foregroundColor: NSColor.systemRed]))
+        text.append(
+            NSAttributedString(
+                string: " visible", attributes: [.font: NSFont.systemFont(ofSize: 40), .foregroundColor: NSColor.black])
+        )
+        let rendered = RenderedText(text)
+        let marks = rendered.screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, detect: "red text")])
+        try #require(marks.count == 1)
+        let red = rendered.span(of: rendered.text.range(of: "secret")!)
+        #expect(red.contains(rendered.pixelX(marks[0].x + (marks[0].w ?? 0) / 2)))
+    }
+
+    /// Vision reads a small "−6" as "-б" and curly quotes vary; a match still finds them.
+    @Test func toleratesCyrillicAndDashLookalikes() {
+        let rendered = RenderedText("diff +45 −6 lines, don’t")
+        let misread = RecognizedScreenshot(
+            lines: [.init(text: "diff +45 -б lines, don't", box: rendered.line.box)], pixels: Pixels(rendered.image)!)
+        #expect(misread.resolve([Mark(kind: .redact, x: 0, y: 0, match: "−6 lines")]).count == 1)
+        #expect(misread.resolve([Mark(kind: .redact, x: 0, y: 0, match: "don’t")]).count == 1)
+    }
+
+    /// A cover that missed part of a number: the re-check reads the redacted image, finds the
+    /// visible rest ("v0.") and covers it too.
+    @Test(.enabled("needs on-device text recognition") { await visionReadsText() })
+    func checkCoversWhatAFirstPassMissed() throws {
+        let rendered = RenderedText("release v0.5.3 now", font: .systemFont(ofSize: 48))
+        let screenshot = try rendered.recognized()
+        let width = Double(rendered.image.width)
+        let partial = rendered.span(of: rendered.text.range(of: "5.3")!)
+        let missed = Mark(
+            kind: .redact, x: partial.lowerBound / width, y: rendered.line.box.minY,
+            w: (partial.upperBound - partial.lowerBound) / width, h: rendered.line.box.height)
+        let checked = screenshot.checkingRedactions(
+            [missed], requested: [Mark(kind: .redact, x: 0, y: 0, detect: "numbers")])
+        #expect(checked.repaired >= 1)
+        let version = rendered.span(of: rendered.text.range(of: "v0.5.3")!)
+        let left = checked.marks.map { rendered.pixelX($0.x) }.min() ?? .infinity
+        #expect(left <= version.lowerBound + 2, "the v is covered now")
+    }
+
+    /// Two OCR readings of one line place a step a few pixels apart: it is still one step.
+    @Test func stepsFromTwoReadingsAreOne() {
+        let step = Mark(kind: .step, x: 0.3, y: 0.40, label: "1")
+        var nearby = step
+        (nearby.x, nearby.y) = (0.302, 0.403)
+        #expect(nearby.isDuplicate(of: step))
+        (nearby.x, nearby.y) = (0.3, 0.43)  // the next line down
+        #expect(!nearby.isDuplicate(of: step))
+    }
+
+    /// A narrowed request isn't re-run: its context is covered by then, and without it every phone
+    /// number on screen would be covered.
+    @Test func checkKeepsNarrowedRequestsNarrow() throws {
+        let screenshot = RenderedText("a 0123 b").screenshot
+        let request = Mark(kind: .redact, x: 0, y: 0, context: "a 0123", detect: "numbers")
+        let checked = screenshot.checkingRedactions([], requested: [request])
+        #expect(checked.marks.isEmpty && checked.repaired == 0)
+    }
+
+    /// "11" isn't "ll": a look-alike match must keep one of the text's own characters.
+    @Test func digitsDontMatchLookalikeWords() {
+        let screenshot = RenderedText("it is still here").screenshot
+        #expect(screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, match: "11")]).isEmpty)
+    }
+
+    /// Dark mode's diff counts, cut from a real capture: green "+6" and red "−6" on tinted chips,
+    /// placed in a full-size Retina screen. Vision shrinks each image it reads, so the whole screen
+    /// and 2048 px tiles lose this text; the 2× pass over smaller tiles reads it.
+    @Test(.enabled("needs on-device text recognition") { await visionReadsText() })
+    func readsSmallColouredChipsInAFullScreen() throws {
+        let url = try #require(Bundle.module.url(forResource: "Fixtures/diff-chips", withExtension: "png"))
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let chips = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        let context = try #require(
+            CGContext(
+                data: nil, width: 3600, height: 2338, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: 0x18 / 255, green: 0x18 / 255, blue: 0x18 / 255, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 3600, height: 2338))
+        context.draw(chips, in: CGRect(x: 1840, y: 1643, width: chips.width, height: chips.height))
+        let image = try #require(context.makeImage())
+        let screenshot = try #require(RecognizedScreenshot(image: image))
+        let covers = screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, detect: "numbers")]).map {
+            $0.frame(in: CGSize(width: 3600, height: 2338))
+        }
+        for (count, center) in [("+6", CGPoint(x: 2052, y: 672)), ("−6", CGPoint(x: 2096, y: 672))] {
+            #expect(covers.contains { $0.contains(center) }, "\(count) is covered")
+        }
+    }
+
+    /// A listed match, once covered, isn't searched for again: "11" would find the "ll" in "still".
+    @Test(.enabled("needs on-device text recognition") { await visionReadsText() })
+    func checkLeavesLookalikeWordsAlone() throws {
+        let rendered = RenderedText("open ask11 and still wait", font: .systemFont(ofSize: 48))
+        let screenshot = try rendered.recognized()
+        let request = Mark(kind: .redact, x: 0, y: 0, match: "11", context: "ask11")
+        let checked = screenshot.checkingRedactions(screenshot.resolve([request]), requested: [request])
+        let still = rendered.span(of: rendered.text.range(of: "still")!)
+        #expect(checked.marks.allSatisfy { rendered.pixelX($0.x) < still.lowerBound })
+    }
+
+    /// An email address wrapped onto the next line: covered on both lines; an arrow points once.
+    @Test func matchesAcrossALineBreak() {
+        let rendered = RenderedText("contact jane.doe@exam\nple.com today")
+        let box = rendered.line.box
+        let half = box.height / 2
+        let screenshot = RecognizedScreenshot(
+            lines: [
+                .init(
+                    text: "contact jane.doe@exam", box: CGRect(x: box.minX, y: box.minY, width: box.width, height: half)
+                ),
+                .init(
+                    text: "ple.com today",
+                    box: CGRect(x: box.minX, y: box.minY + half, width: box.width * 0.6, height: half)),
+            ], pixels: Pixels(rendered.image)!)
+        let covers = screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, match: "jane.doe@example.com")])
+        #expect(covers.count == 2)
+        #expect(Set(covers.map { $0.y < box.minY + half / 2 }).count == 2, "one cover per line")
+        #expect(screenshot.resolve([Mark(kind: .arrow, x: 0, y: 0, match: "jane.doe@example.com")]).count == 1)
+    }
+
     @Test func exactMatchesBeatLookalikes() {
         #expect(RenderedText("O and 0").screenshot.resolve([Mark(kind: .box, x: 0, y: 0, match: "0")]).count == 1)
     }

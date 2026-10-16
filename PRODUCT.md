@@ -27,7 +27,7 @@ AI annotation that lands on exact words and letters: the model decides *what* to
 ## Capabilities and Constraints
 
 - Tools: select, arrow, line, box, ellipse, highlight, redact (solid, secure), pen, text, numbered step, crop (by hand or by AI, non-destructive); shapes resize by their handles, Shift constrains (square, circle, 45°, proportions); arrow keys nudge; undo and redo; zoom (toolbar menu, ⌘+/⌘−/⌘0/⌘9, pinch); drag the annotated image out to other apps; 8 named colours plus custom colours (screen eyedropper, system colour panel); S/M/L sizes; undo; copy (⇧⌘C) and save (⌘S) at full resolution.
-- AI: Claude or Codex via the installed CLI; AI marks are ordinary editable marks. Requests are blocked while one runs.
+- AI: Claude, Codex or a local Ollama model; AI marks are ordinary editable marks. Requests are blocked while one runs. "All X" requests use built-in detectors (numbers, emails, URLs, phones, IPs, dates, addresses, cards, IBANs, IDs, secrets, names, text colour) and redactions are re-checked by reading the result again.
 - Must build with only the Xcode Command Line Tools (no SwiftUI macros: `@State`, `@Observable`, `#Preview`). macOS 15+.
 - Quality over speed is a standing rule for AI behaviour.
 

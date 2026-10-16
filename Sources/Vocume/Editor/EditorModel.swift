@@ -542,7 +542,7 @@ import VocumeCore
         requestTask = Task.detached {
             let screenshot = await recognition.value
             await MainActor.run { if self.activeRequest == id { self.stage = "\(backend.displayName) is annotating" } }
-            let result: Result<[Mark], any Error>
+            let result: Result<RecognizedScreenshot.Checked, any Error>
             do {
                 guard let screenshot else {
                     throw AnnotationError(description: "Couldn't read \(url.lastPathComponent)")
@@ -550,7 +550,11 @@ import VocumeCore
                 let prompt = AnnotationPrompt.make(request: request, textSummary: screenshot.textSummary)
                 let reply = try await backend.ask(
                     prompt, image: url, claude: session, codex: codex, ollamaModel: ollamaModel)
-                result = .success(screenshot.resolve(try AnnotationPrompt.parseMarks(from: reply)))
+                let requested = try AnnotationPrompt.parseMarks(from: reply)
+                if requested.contains(where: { $0.kind == .redact }) {
+                    await MainActor.run { if self.activeRequest == id { self.stage = "Checking the redactions" } }
+                }
+                result = .success(screenshot.checkingRedactions(screenshot.resolve(requested), requested: requested))
             } catch {
                 result = .failure(error)
             }
@@ -574,7 +578,7 @@ import VocumeCore
         if announce { flash("Request cancelled") }
     }
 
-    private func finishAI(_ result: Result<[Mark], any Error>, request: UUID) {
+    private func finishAI(_ result: Result<RecognizedScreenshot.Checked, any Error>, request: UUID) {
         guard request == activeRequest else { return }  // cancelled meanwhile
         activeRequest = nil
         cancelActiveRequest = nil
@@ -582,12 +586,17 @@ import VocumeCore
         requestBackend = nil
         isBusy = false
         switch result {
-        case .success(let new) where new.isEmpty:
+        case .success(let checked) where checked.marks.isEmpty:
             error = "No marks: the AI returned none, or its text matches weren't found."
-        case .success(let new):
+        case .success(let checked):
             snapshot()
-            marks += new.filter { $0.kind != .crop }
-            if let area = Mark.cropArea(of: new) { crop = area }
+            marks += checked.marks.filter { $0.kind != .crop }
+            if let area = Mark.cropArea(of: checked.marks) { crop = area }
+            if checked.unconfirmed > 0 {
+                error = "Some text still turned up after three checks and was covered too; look over the redactions."
+            } else if checked.repaired > 0 {
+                flash("The check covered \(checked.repaired) more")
+            }
         case .failure(let failure):
             error = "\(failure)"
         }

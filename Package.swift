@@ -22,6 +22,7 @@ let package = Package(
         .testTarget(
             name: "VocumeCoreTests",
             dependencies: ["VocumeCore"],
+            resources: [.copy("Fixtures")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
     ]

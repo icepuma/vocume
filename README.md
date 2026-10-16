@@ -28,6 +28,7 @@ Vocume lives in the menu bar. Capture an area, a window or the screen and it ope
 - **Crop:** by hand with the Crop tool, or ask the AI ("crop to the error dialog"). Cropping never moves your marks and can be changed or undone.
 - **Colours:** 8 inks, any custom colour from the system colour panel, or an eyedropper to pick one straight off the screen.
 - **AI that hits the right spot:** the model decides *what* to mark; on-device text recognition decides *where*, down to single letters.
+- **Redaction you can rely on:** "redact all numbers / emails / URLs / phone numbers / API keys / names / red text" uses built-in detectors that find every occurrence themselves, then Vocume reads the redacted result again and covers anything still visible.
 - **No API keys:** uses the Claude Code or Codex login you already have, or a model running locally in Ollama.
 - **Out of the way:** global capture shortcuts, one editor window per capture, drag the result straight into Slack or a GitHub issue, back to the menu bar when you're done.
 
@@ -84,6 +85,8 @@ Vocume detects what's on your Mac and offers it in the AI bar:
 ## Privacy
 
 Vocume has no account, no telemetry and no server. Screenshots stay on your Mac unless you ask an AI to annotate one: then the image and the recognized text go to the provider you picked (Anthropic through `claude`, OpenAI through `codex`), or stay on your Mac with Ollama. Text recognition always runs on-device.
+
+Redaction is only as good as what on-device text recognition can read: text cut off at the edge of the capture or smaller than about 7 pixels may be missed, so look over a redacted image before you share it.
 
 > [!WARNING]
 > Asking Claude or Codex to redact something sends them the **unredacted** screenshot, so they see exactly what you wanted hidden. For sensitive content, redact by hand or use a local Ollama model.

@@ -19,6 +19,8 @@ final class ClaudeSession: Sendable {
             "claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
             "--safe-mode", "--tools", "", "--no-session-persistence",
             "--system-prompt", AnnotationPrompt.systemPrompt,
+            // The reply is checked against the marks' schema, so it is always well-formed JSON.
+            "--json-schema", AnnotationPrompt.objectReplySchema,
         ]
         process.environment = Shell.environment()
         process.currentDirectoryURL = FileManager.default.temporaryDirectory
@@ -72,6 +74,13 @@ final class ClaudeSession: Sendable {
                 else { continue }
                 if event["is_error"] as? Bool == true {
                     throw AnnotationError(description: "claude: \(event["result"] ?? event)")
+                }
+                // With --json-schema the validated reply is `structured_output`; `result` is the
+                // model's last text, which may be prose or an unchecked array.
+                if let structured = event["structured_output"],
+                    let data = try? JSONSerialization.data(withJSONObject: structured)
+                {
+                    return String(decoding: data, as: UTF8.self)
                 }
                 return event["result"] as? String ?? ""
             }

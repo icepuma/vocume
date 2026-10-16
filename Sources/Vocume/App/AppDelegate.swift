@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import VocumeCore
 
 /// The menu-bar item, the main menu, global capture shortcuts, and the capture → editor flow.
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
@@ -12,6 +13,8 @@ import UniformTypeIdentifiers
         NSApp.mainMenu = mainMenu()
         installStatusItem()
         AISettings.shared.refresh()  // detect AI logins once at launch; Settings re-checks on open
+        // Vision's first recognition after an update is slow; get it out of the way before a capture.
+        Task.detached(priority: .utility) { RecognizedScreenshot.warmUp() }
         let shortcuts = CaptureShortcuts.shared
         shortcuts.onTrigger = { [weak self] mode in self?.capture(mode) }
         shortcuts.register()

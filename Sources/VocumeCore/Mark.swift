@@ -36,6 +36,11 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
     /// AI only: longer text around the occurrence meant, so one occurrence of a repeated `match`
     /// can get its own mark or label.
     public var context: String?
+    /// AI only: a regular expression standing for a whole class of text ("every number"), matched
+    /// against the OCR text by the app instead of the model listing each one.
+    public var pattern: String?
+    /// AI only: a ``TextKind`` by name ("numbers", "emails", "red text"…) that the app finds itself.
+    public var detect: String?
 
     public init(
         kind: Kind,
@@ -50,7 +55,9 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
         match: String? = nil,
         word: Bool? = nil,
         anyCase: Bool? = nil,
-        context: String? = nil
+        context: String? = nil,
+        pattern: String? = nil,
+        detect: String? = nil
     ) {
         self.kind = kind
         self.x = x
@@ -65,11 +72,13 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
         self.word = word
         self.anyCase = anyCase
         self.context = context
+        self.pattern = pattern
+        self.detect = detect
     }
 
     enum CodingKeys: String, CodingKey {
         case kind = "type"
-        case x, y, w, h, label, color, size, points, match, word, anyCase, context
+        case x, y, w, h, label, color, size, points, match, word, anyCase, context, pattern, detect
     }
 
     /// Lenient decoding for AI replies: marks that use `match` have no position, and an unknown
@@ -89,6 +98,8 @@ public struct Mark: Codable, Identifiable, Equatable, Sendable {
         word = try c.decodeIfPresent(Bool.self, forKey: .word)
         anyCase = try c.decodeIfPresent(Bool.self, forKey: .anyCase)
         context = try c.decodeIfPresent(String.self, forKey: .context)
+        pattern = try c.decodeIfPresent(String.self, forKey: .pattern)
+        detect = try c.decodeIfPresent(String.self, forKey: .detect)
     }
 
     /// Whether the mark is an empty text note (one the user started but never typed into).

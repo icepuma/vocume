@@ -167,6 +167,23 @@ struct TextLine {
         return smaller ? rows : nil
     }
 
+    /// Each word's characters and pixel area (normalized), or the whole line as one word when its
+    /// words couldn't be matched to the ink.
+    func wordRects(pixels: Pixels) -> [(chars: Range<String.Index>, rect: CGRect)] {
+        guard !words.isEmpty else { return text.isEmpty ? [] : [(text.startIndex..<text.endIndex, box)] }
+        let (width, height) = (Double(pixels.width), Double(pixels.height))
+        return words.map { word in
+            let rows = word.rows.map { Double($0.lowerBound)..<Double($0.upperBound) }
+            return (
+                word.chars,
+                CGRect(
+                    x: Double(word.columns.lowerBound) / width, y: rows.map { $0.lowerBound / height } ?? box.minY,
+                    width: Double(word.columns.count) / width,
+                    height: rows.map { ($0.upperBound - $0.lowerBound) / height } ?? box.height)
+            )
+        }
+    }
+
     private func isInk(_ column: Int) -> Bool {
         ink.indices.contains(column - firstColumn) && ink[column - firstColumn]
     }
