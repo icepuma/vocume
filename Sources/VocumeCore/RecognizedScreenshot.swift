@@ -106,7 +106,11 @@ public struct RecognizedScreenshot: Sendable {
                     }
                 }
             }
-            return hits.map { mark.placed(on: measured[$0.line].locate($0.range, pixels: pixels), pixels: pixels) }
+            return hits.map {
+                mark.placed(
+                    on: measured[$0.line].locate($0.range, pixels: pixels, covering: mark.kind == .redact),
+                    pixels: pixels)
+            }
         }.reduce(into: []) { kept, mark in
             if !kept.contains(where: {
                 var other = $0; other.id = mark.id; return other == mark
@@ -123,23 +127,29 @@ extension RecognizedScreenshot {
         ["0", "O", "o"], ["1", "l", "I", "|"], ["5", "S"], ["8", "B"],
     ]
 
-    /// Every occurrence of `text` in the lines, with look-alike characters treated as equal: OCR
-    /// misreads some copies of a text and not others, and the AI may copy either spelling. Text with
-    /// fewer than 3 other characters ("0", "lol") would hit look-alikes everywhere, so it matches
-    /// exactly and falls back to look-alikes only when there is no exact match at all.
+    /// Every occurrence of `text` in the lines, tolerating OCR's slips: look-alike characters count
+    /// as equal, and spacing may differ (inline code reads as "install. sh", or loses its spaces), so
+    /// a stray space may sit between any two characters and the text's own spaces are optional. OCR
+    /// slips on some copies of a text and not others, and the AI may copy either spelling. Text with
+    /// fewer than 3 other characters ("0", "lol") would match too much that way, so it matches
+    /// exactly and falls back to the tolerant search only when there is no exact match at all.
     fileprivate static func find(
         _ text: String, wholeWords: Bool, anyCase: Bool, in lines: [TextLine]
     ) -> [(line: Int, range: Range<String.Index>)] {
-        let distinctive = text.filter { character in !lookalikes.contains { $0.contains(character) } }.count >= 3
+        let text = text.trimmingCharacters(in: .whitespaces)
+        let distinctive =
+            text.filter { character in
+                !character.isWhitespace && !lookalikes.contains { $0.contains(character) }
+            }.count >= 3
         for tolerant in distinctive ? [true] : [false, true] {
             var pattern =
                 tolerant
                 ? text.map { character in
-                    lookalikes.first { $0.contains(character) }.map {
+                    if character.isWhitespace { return "\\s*" }
+                    return lookalikes.first { $0.contains(character) }.map {
                         "[" + $0.sorted().map(String.init).joined() + "]"
-                    }
-                        ?? NSRegularExpression.escapedPattern(for: String(character))
-                }.joined()
+                    } ?? NSRegularExpression.escapedPattern(for: String(character))
+                }.joined(separator: "\\s?")
                 : NSRegularExpression.escapedPattern(for: text)
             if wholeWords { pattern = "(?<![\\p{L}\\p{N}])" + pattern + "(?![\\p{L}\\p{N}])" }
             guard let regex = try? NSRegularExpression(pattern: pattern, options: anyCase ? .caseInsensitive : [])

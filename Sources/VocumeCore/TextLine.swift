@@ -48,16 +48,28 @@ struct TextLine {
 
     /// Box for `text[range]` (normalized, top-left origin): estimate inside its words' real pixel
     /// span, then snap to actual glyph edges.
-    func locate(_ range: Range<String.Index>, pixels: Pixels) -> CGRect {
+    /// `covering` (redactions) never leaves a letter uncovered: see `inkStart`.
+    func locate(_ range: Range<String.Index>, pixels: Pixels, covering: Bool = false) -> CGRect {
         let imageWidth = Double(pixels.width)
         var reference = text.startIndex..<text.endIndex
         var (spanStart, spanEnd) = (box.minX * imageWidth, box.maxX * imageWidth)
         var (top, height) = (box.minY, box.height)
+        var (inkStart, inkEnd): (Double?, Double?) = (nil, nil)
         if let first = words.first(where: { $0.chars.contains(range.lowerBound) }),
             let last = words.first(where: { $0.chars.contains(text.index(before: range.upperBound)) })
         {
             reference = first.chars.lowerBound..<last.chars.upperBound
             (spanStart, spanEnd) = (Double(first.columns.lowerBound), Double(last.columns.upperBound))
+            // A cover reaches the word's ink edge when only punctuation lies between: OCR invents
+            // brackets from inline-code chips ("(install. sh)") that have no ink, and they would
+            // shift the cover off the first letter. Real brackets look the same in the text, so only
+            // covers do this, where hiding a bracket too is harmless and a visible letter is a leak.
+            if covering, text[first.chars.lowerBound..<range.lowerBound].allSatisfy(\.isPunctuation) {
+                inkStart = spanStart
+            }
+            if covering, text[range.upperBound..<last.chars.upperBound].allSatisfy(\.isPunctuation) {
+                inkEnd = spanEnd
+            }
             if let a = first.rows, let b = last.rows {
                 let rows = min(a.lowerBound, b.lowerBound)..<max(a.upperBound, b.upperBound)
                 (top, height) = (
@@ -67,7 +79,8 @@ struct TextLine {
         }
         let columns = Int(spanStart)..<max(Int(spanEnd.rounded(.up)), Int(spanStart))
         func columnsRect(_ a: Double, _ b: Double) -> CGRect {
-            CGRect(x: a / imageWidth, y: top, width: max(b - a, 1) / imageWidth, height: height)
+            let (a, b) = (min(a, inkStart ?? a), max(b, inkEnd ?? b))
+            return CGRect(x: a / imageWidth, y: top, width: max(b - a, 1) / imageWidth, height: height)
         }
 
         // Exact case: one ink run per letter (monospace, most UI text), so letters map to runs.

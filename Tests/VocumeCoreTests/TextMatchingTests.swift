@@ -136,6 +136,43 @@ struct TextMatchingTests {
         #expect(mixed.resolve([Mark(kind: .box, x: 0, y: 0, match: "v0.4.0")]).count == 2)
     }
 
+    /// Inline code reads with a stray space ("install. sh") or loses its spaces; it is still found.
+    @Test func toleratesOCRSpacing() throws {
+        let rendered = RenderedText("run install.sh now")
+        let spaced = RecognizedScreenshot(
+            lines: [.init(text: "run install. sh now", box: rendered.line.box)], pixels: Pixels(rendered.image)!)
+        let mark = try #require(spaced.resolve([Mark(kind: .redact, x: 0, y: 0, match: "install.sh")]).first)
+        let target = rendered.span(of: rendered.text.range(of: "install.sh")!)
+        #expect(target.contains(rendered.pixelX(mark.x + (mark.w ?? 0) / 2)))
+
+        let squeezed = RecognizedScreenshot(
+            lines: [.init(text: "archive:false here", box: RenderedText("archive: false here").line.box)],
+            pixels: Pixels(RenderedText("archive: false here").image)!)
+        #expect(squeezed.resolve([Mark(kind: .redact, x: 0, y: 0, match: "archive: false")]).count == 1)
+    }
+
+    /// OCR reads inline code as "(install. sh)": brackets made from the chip's edges, with no ink.
+    /// A redaction must still cover every letter.
+    @Test func inventedBracketsDontShiftTheMark() throws {
+        let rendered = RenderedText("use install.sh now")
+        let width = Double(rendered.image.width)
+        func box(_ text: String) -> CGRect {
+            let span = rendered.span(of: rendered.text.range(of: text)!)
+            return CGRect(
+                x: span.lowerBound / width, y: rendered.line.box.minY,
+                width: (span.upperBound - span.lowerBound) / width,
+                height: rendered.line.box.height)
+        }
+        let line = RecognizedScreenshot.Line(
+            text: "use (install. sh) now", box: rendered.line.box,
+            wordBoxes: [box("use"), box("install."), box("sh"), box("now")])
+        let screenshot = RecognizedScreenshot(lines: [line], pixels: Pixels(rendered.image)!)
+        let mark = try #require(screenshot.resolve([Mark(kind: .redact, x: 0, y: 0, match: "install.sh")]).first)
+        let target = rendered.span(of: rendered.text.range(of: "install.sh")!)
+        #expect(rendered.pixelX(mark.x) <= target.lowerBound + 1, "covers the first letter")
+        #expect(rendered.pixelX(mark.x + (mark.w ?? 0)) >= target.upperBound - 1, "covers the last letter")
+    }
+
     @Test func exactMatchesBeatLookalikes() {
         #expect(RenderedText("O and 0").screenshot.resolve([Mark(kind: .box, x: 0, y: 0, match: "0")]).count == 1)
     }
@@ -191,7 +228,7 @@ struct TextMatchingTests {
                 string: "[jev-model-router] main loop → effort low",
                 attributes: [.font: NSFont.systemFont(ofSize: 34), .foregroundColor: NSColor.black]))
         let rendered = RenderedText(text)
-        let marks = try rendered.recognized().resolve([Mark(kind: .redact, x: 0, y: 0, match: "jev-model-router")])
+        let marks = try rendered.recognized().resolve([Mark(kind: .highlight, x: 0, y: 0, match: "jev-model-router")])
             .sorted { $0.x < $1.x }
         try #require(marks.count == 2)
         for (mark, target) in zip(marks, rendered.text.ranges(of: "jev-model-router")) {
@@ -199,6 +236,6 @@ struct TextMatchingTests {
             #expect(abs(rendered.pixelX(mark.x) - span.lowerBound) < 5)
             #expect(abs(rendered.pixelX(mark.x + (mark.w ?? 0)) - span.upperBound) < 5)
         }
-        #expect((marks[0].h ?? 0) < (marks[1].h ?? 0) * 0.8, "the small label gets a small cover")
+        #expect((marks[0].h ?? 0) < (marks[1].h ?? 0) * 0.8, "the small label gets a small mark")
     }
 }
