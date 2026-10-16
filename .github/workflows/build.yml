@@ -3,6 +3,8 @@
 # Optional signing + notarization: add the repo secrets MACOS_CERT_P12 (base64 of a Developer ID
 # Application .p12), MACOS_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID and APPLE_APP_PASSWORD
 # (an app-specific password). Without them the DMG is ad-hoc signed.
+# CI compiles with the same Swift as our Macs (Xcode 27.0 / Command Line Tools 27.0: Swift 6.4):
+# older compilers have crashed on valid code. Move both together.
 name: Build
 
 on:
@@ -14,13 +16,18 @@ on:
 permissions:
   contents: write
 
+env:
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
+
 jobs:
   check:
-    runs-on: macos-26
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
-        run: swift --version
+        run: |
+          swift --version
+          swift --version 2>&1 | grep -q "Apple Swift version 6.4 " || { echo "::error::Expected Swift 6.4, the local compiler"; exit 1; }
       - name: Lint
         run: make lint
       - name: Build
@@ -30,11 +37,16 @@ jobs:
 
   build:
     needs: check
-    runs-on: macos-26
+    runs-on: xcode-27
     env:
       MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          swift --version 2>&1 | grep -q "Apple Swift version 6.4 " || { echo "::error::Expected Swift 6.4, the local compiler"; exit 1; }
 
       - name: Version
         run: |

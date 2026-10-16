@@ -11,7 +11,7 @@ macOS menu-bar app (Swift package, macOS 15+) that annotates screenshots by hand
 - `Sources/VocumeCore` — everything testable: the `Mark` model (positions are 0–1 fractions of the image), geometry, `MarkRenderer`, OCR matching (`RecognizedScreenshot`), the AI prompt and reply parsing. New logic lands here, with tests in `Tests/VocumeCoreTests`.
 - `Sources/Vocume` — the thin app: `App/` (menu bar, main menu, `Windows` coordinator), `Capture/` (`screencapture` modes, global shortcuts via Carbon hot keys), `Editor/`, `AI/` (CLI processes), `Settings/`. UI types are `@MainActor`; blocking CLI work runs off the main actor.
 
-Every target is Swift 6 language mode with strict concurrency, on Swift 6.2+ (`isolated deinit`); CI uses the `macos-26` runner to match.
+Every target is Swift 6 language mode with strict concurrency, on Swift 6.2+ (`isolated deinit`); CI runs on the `xcode-27` runner pinned to Xcode 27.0 (Swift 6.4), the same compiler as the Command Line Tools on our Macs: older compilers have crashed on valid code, so when the local toolchain moves, move CI with it.
 
 ## UI work
 
