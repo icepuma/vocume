@@ -272,3 +272,13 @@ Settings is a standard grouped Form (520pt wide): an "Annotate with AI" switch, 
 - **Applied:** only the cropped part is laid out, fitted and zoomed like a whole image; marks keep whole-image coordinates, so they are clipped, never moved. Copy, Save and drag-out export the cropped part; the subtitle shows its size with "(cropped)".
 - **AI:** `crop` items (by `match` with a two-line-height margin, or by coordinates) crop to the area holding them all, applied with the reply's marks as one undo step.
 
+## Revision: Settings panes
+
+Settings is a native preferences window (`NSTabViewController`, toolbar tabs, `.preference` toolbar style), fixed width 480pt, each pane a grouped `Form` that sets its own height. The title is the pane's name, and the window reopens on the last pane used. Panes: **General** (`gearshape`: Open at Login via `SMAppService`, with a Login Items shortcut when macOS wants approval), **Shortcuts** (`keyboard`: capture shortcut recorders, and how to free ⇧⌘3/⇧⌘4 with a button to macOS's Keyboard settings), **AI** (`sparkles`: the AI switch, providers with Check Again in the section header, the Ollama model, and a footer saying where screenshots go). Explanations sit under a row's title (as in System Settings) and footers hold only trailing buttons such as Check Again, since macOS form footers align trailing. Changes apply immediately; there is no Apply button.
+
+## Revision: macOS conformance pass
+
+- **Editor minimum size 1000 × 640pt** (`EditorView.minimumSize`): narrower, the toolbar pushed Copy and Save into the » overflow menu. At 1000pt every item fits even with a long capture name, because the title shortens first. (SwiftUI resets `NSToolbarItem.visibilityPriority`, so priorities can't do this.)
+- **Menus:** the app menu has Services, Hide Others (⌥⌘H) and Show All; a Help menu opens the README (⌘?). Undo and Redo apply to the text being typed while a field has the cursor, otherwise to the marks.
+- **Canvas menu order:** Copy Image and Save… first, Reset Crop, then the destructive Delete Mark and Clear All Marks last.
+

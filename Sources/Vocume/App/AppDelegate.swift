@@ -76,8 +76,24 @@ import UniformTypeIdentifiers
     // Editor commands, routed to the editor in front.
     @objc private func saveImage() { Windows.shared.keyEditor?.save() }
     @objc private func copyImage() { Windows.shared.keyEditor?.copyImage() }
-    @objc private func undoMark() { Windows.shared.keyEditor?.undo() }
-    @objc private func redoMark() { Windows.shared.keyEditor?.redo() }
+    // While a text field has the cursor, undo and redo belong to its text.
+    @objc private func undoMark() {
+        if let text = NSApp.keyWindow?.firstResponder as? NSTextView {
+            text.undoManager?.undo()
+        } else {
+            Windows.shared.keyEditor?.undo()
+        }
+    }
+    @objc private func redoMark() {
+        if let text = NSApp.keyWindow?.firstResponder as? NSTextView {
+            text.undoManager?.redo()
+        } else {
+            Windows.shared.keyEditor?.redo()
+        }
+    }
+    @objc private func openHelp() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/icepuma/vocume#readme")!)
+    }
     @objc private func zoomIn() { Windows.shared.keyEditor?.zoomIn() }
     @objc private func zoomOut() { Windows.shared.keyEditor?.zoomOut() }
     @objc private func actualSize() { Windows.shared.keyEditor?.setZoom(1) }
@@ -113,7 +129,17 @@ import UniformTypeIdentifiers
         app.addItem(.separator())
         app.addItem(menuItem("Settings…", #selector(openSettings), ","))
         app.addItem(.separator())
+        let services = NSMenu(title: "Services")
+        app.addItem(withTitle: "Services", action: nil, keyEquivalent: "").submenu = services
+        NSApp.servicesMenu = services
+        app.addItem(.separator())
         app.addItem(withTitle: "Hide Vocume", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(
+            withTitle: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h"
+        ).keyEquivalentModifierMask = [.command, .option]
+        app.addItem(
+            withTitle: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        app.addItem(.separator())
         app.addItem(withTitle: "Quit Vocume", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         let file = NSMenu(title: "File")
@@ -154,7 +180,11 @@ import UniformTypeIdentifiers
             withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         NSApp.windowsMenu = window
 
-        for submenu in [app, file, edit, view, window] {
+        let help = NSMenu(title: "Help")
+        help.addItem(menuItem("Vocume Help", #selector(openHelp), "?"))
+        NSApp.helpMenu = help
+
+        for submenu in [app, file, edit, view, window, help] {
             main.addItem(withTitle: submenu.title, action: nil, keyEquivalent: "").submenu = submenu
         }
         return main

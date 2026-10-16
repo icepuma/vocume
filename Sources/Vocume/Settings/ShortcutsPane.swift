@@ -1,28 +1,45 @@
 import AppKit
 import SwiftUI
 
-/// Settings › Capture: a global shortcut per capture mode.
-struct CaptureSettingsSection: View {
+/// Settings › Shortcuts: a global shortcut per capture mode.
+struct ShortcutsPane: View {
     @ObservedObject var shortcuts = CaptureShortcuts.shared
 
     var body: some View {
+        Form {
+            captureSection
+            Section {
+                LabeledContent {
+                    Button("Keyboard Shortcuts…") {
+                        NSWorkspace.shared.open(
+                            URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+                    }
+                } label: {
+                    Text("Use ⇧⌘3 and ⇧⌘4")
+                    Text("macOS keeps them for itself. Turn them off there, then record them here.")
+                }
+            }
+        }
+        .settingsPane()
+    }
+
+    private var captureSection: some View {
         Section {
             ForEach(CaptureMode.shortcutModes) { mode in
                 LabeledContent {
                     ShortcutRecorder(mode: mode)
                 } label: {
                     Label(mode.title, systemImage: mode.symbol)
+                    // Explanations go under the row's title, as in System Settings; footers hold buttons.
                     if shortcuts.failed.contains(mode) {
                         Text("Another app is using this shortcut.").foregroundStyle(.orange)
+                    } else if mode == .area {
+                        Text("Drag to select, or press Space for a window.")
                     }
                 }
             }
         } header: {
             Text("Capture")
-        } footer: {
-            Text("Uses macOS's own selection: drag for an area, Space switches to window mode, Esc cancels.")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -45,6 +62,7 @@ private struct ShortcutRecorder: View {
             }
             .buttonStyle(.bordered)
             .tint(recorder.isRecording ? .accentColor : nil)
+            .help("Click, then press the new shortcut. ⌫ removes it, Esc cancels.")
             if shortcuts.shortcuts[mode] != nil, !recorder.isRecording {
                 Button("Clear", systemImage: "xmark.circle.fill") { shortcuts.set(nil, for: mode) }
                     .labelStyle(.iconOnly)

@@ -75,8 +75,8 @@ import SwiftUI
         let chrome = NSSize(width: 56, height: 52 + 56 + 76)  // toolbar, print margins, AI bar
         let wanted = NSSize(width: image.size.width + chrome.width, height: image.size.height + chrome.height)
         return NSSize(
-            width: min(max(wanted.width, 860), screen.width * 0.85),
-            height: min(max(wanted.height, 640), screen.height * 0.85)
+            width: min(max(wanted.width, EditorView.minimumSize.width), screen.width * 0.85),
+            height: min(max(wanted.height, EditorView.minimumSize.height), screen.height * 0.85)
         )
     }
 
@@ -85,15 +85,9 @@ import SwiftUI
     func showSettings() {
         AISettings.shared.refresh()
         if settingsWindow == nil {
-            let hosting = NSHostingView(rootView: SettingsView(settings: AISettings.shared))
-            let window = NSWindow(
-                contentRect: NSRect(origin: .zero, size: hosting.fittingSize),
-                styleMask: [.titled, .closable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = "Vocume Settings"
-            window.contentView = hosting
+            let window = NSWindow(contentViewController: SettingsPanes.controller())
+            window.styleMask = [.titled, .closable]
+            window.toolbarStyle = .preference
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]

@@ -54,7 +54,7 @@ Capture with a shortcut or from the menu-bar menu:
 | Entire screen (the one under the pointer) | ⌥⇧⌘3 |
 | Entire screen in 5 seconds | menu only |
 
-Change or clear the shortcuts in **Settings…** (⌘,). The menu also has **Open Image…** and **Annotate Clipboard Image** for images you already have.
+Change or clear the shortcuts in **Settings…** (⌘,), where you can also have Vocume open at login. The menu also has **Open Image…** and **Annotate Clipboard Image** for images you already have.
 
 In the editor:
 

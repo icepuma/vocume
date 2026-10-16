@@ -21,8 +21,12 @@ struct EditorView: View {
             .toolbar { toolbarContent }
             .navigationTitle(model.url.lastPathComponent)
             .navigationSubtitle(pixelSize)
-            .frame(minWidth: 860, minHeight: 640)
+            .frame(minWidth: Self.minimumSize.width, minHeight: Self.minimumSize.height)
     }
+
+    /// Wide enough that every toolbar item fits, even with a long capture name (the title
+    /// shortens first). Narrower, Copy and Save would move into the » overflow menu.
+    static let minimumSize = CGSize(width: 1000, height: 640)
 
     // MARK: The table
 
@@ -193,15 +197,17 @@ struct EditorView: View {
 
     @ViewBuilder
     private var canvasMenu: some View {
+        // Common actions first, destructive ones last.
+        Button("Copy Image", systemImage: "doc.on.doc", action: model.copyImage)
+        Button("Save…", systemImage: "square.and.arrow.down") { model.save() }
+        Divider()
+        Button("Reset Crop", systemImage: "crop", action: model.resetCrop)
+            .disabled(model.crop == nil)
+        Divider()
         Button("Delete Mark", systemImage: "trash", action: model.deleteSelected)
             .disabled(model.selected == nil)
         Button("Clear All Marks", systemImage: "xmark.bin", action: model.clear)
             .disabled(model.marks.isEmpty)
-        Button("Reset Crop", systemImage: "crop", action: model.resetCrop)
-            .disabled(model.crop == nil)
-        Divider()
-        Button("Copy Image", systemImage: "doc.on.doc", action: model.copyImage)
-        Button("Save…", systemImage: "square.and.arrow.down") { model.save() }
     }
 
     // MARK: Feedback
