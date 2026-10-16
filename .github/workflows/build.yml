@@ -23,7 +23,7 @@ jobs:
   check:
     runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Toolchain
         run: |
           swift --version
@@ -41,7 +41,7 @@ jobs:
     env:
       MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Toolchain
         run: |
@@ -77,10 +77,10 @@ jobs:
       - name: Build app and DMG
         run: scripts/build.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: Vocume-${{ env.VERSION }}
           path: build/Vocume-*.dmg
+          archive: false  # the DMG is already compressed; the artifact is the .dmg itself
 
       - name: Publish release
         if: github.ref_type == 'tag'
