@@ -55,7 +55,7 @@ Capture with a shortcut or from the menu-bar menu:
 | Entire screen (the one under the pointer) | ⌥⇧⌘3 |
 | Entire screen in 5 seconds | menu only |
 
-Change or clear the shortcuts in **Settings…** (⌘,), where you can also have Vocume open at login. The menu also has **Open Image…** and **Annotate Clipboard Image** for images you already have.
+Change or clear the shortcuts in **Settings…** (⌘,), where you can also have Vocume open at login. The menu also has **Open…** and **Annotate Clipboard Image** for images you already have, and **Recent Captures**.
 
 In the editor:
 
@@ -68,9 +68,11 @@ In the editor:
 | Square / circle / 45° while drawing; keep proportions while resizing | hold Shift |
 | Zoom in · out · actual size · fit (or pinch) | ⌘+ · ⌘− · ⌘0 · ⌘9 |
 | Ask the AI · Stop it | ⌘↩ · Esc |
-| Copy the annotated image · Save it | ⇧⌘C · ⌘S |
+| Copy the annotated image · Save it · Save a `.vocume` document | ⇧⌘C · ⌘S · ⇧⌘S |
 
-Colour and size are under **Ink** in the toolbar. Drag a selected mark to move it, or drag its handles to resize it; click it again to edit its label. To share, drag the hand icon in the toolbar into another app, or copy or save. Closing a window with marks you haven't copied or saved asks first.
+Colour and size are under **Ink** in the toolbar. Drag a selected mark to move it, or drag its handles to resize it; click it again to edit its label. To share, drag the hand icon in the toolbar into another app, or copy or save.
+
+Like Snagit's library, every capture you open is kept as a `.vocume` document (the screenshot, its marks and its undo history) and saved as you edit, so closing a window never asks and loses nothing. **Recent Captures** reopens one as you left it, undo included; **Show in Finder** there lists them all. Documents untouched for 30 days are deleted.
 
 ## AI annotation
 
@@ -85,6 +87,8 @@ Vocume detects what's on your Mac and offers it in the AI bar:
 ## Privacy
 
 Vocume has no account, no telemetry and no server. Screenshots stay on your Mac unless you ask an AI to annotate one: then the image and the recognized text go to the provider you picked (Anthropic through `claude`, OpenAI through `codex`), or stay on your Mac with Ollama. Text recognition always runs on-device.
+
+Captures are kept for 30 days in `~/Library/Application Support/Vocume/Captures`. A `.vocume` document holds the original screenshot, including what redactions cover: share the image (copy, save or drag), not the document.
 
 Redaction is only as good as what on-device text recognition can read: text cut off at the edge of the capture or smaller than about 7 pixels may be missed, so look over a redacted image before you share it.
 

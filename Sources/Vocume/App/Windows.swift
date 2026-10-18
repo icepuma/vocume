@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import VocumeCore
 
 /// Owns every Vocume window and the app's presence in the Dock.
 ///
@@ -50,8 +51,23 @@ import SwiftUI
 
     // MARK: Editors
 
-    func openEditor(for url: URL) {
-        let model = EditorModel(url: url)
+    /// Opens an image as a new document in the capture library, or a `.vocume` document as it is
+    /// (bringing its editor forward if it's already open).
+    func openEditor(for file: URL) {
+        if let open = editors.values.first(where: {
+            $0.model.documentURL.standardizedFileURL == file.standardizedFileURL
+        }) {
+            return present(open.window)
+        }
+        let opened: (document: VocumeDocument, url: URL, image: URL)
+        do {
+            opened = try CaptureLibrary.shared.open(file)
+        } catch {
+            NSApp.activate()
+            NSAlert(error: error).runModal()
+            return
+        }
+        let model = EditorModel(document: opened.document, url: opened.url, image: opened.image)
         let screen = Self.screenUnderPointer
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: Self.editorSize(for: model.image, on: screen)),
@@ -60,7 +76,7 @@ import SwiftUI
             defer: false
         )
         model.window = window
-        window.title = url.lastPathComponent
+        window.title = opened.image.lastPathComponent
         window.toolbarStyle = .unified  // the view's SwiftUI toolbar fills it (scene bridging)
         window.contentView = NSHostingView(rootView: EditorView(model: model))
         window.isReleasedWhenClosed = false
@@ -165,24 +181,25 @@ import SwiftUI
 
     // MARK: NSWindowDelegate
 
+    /// Closing saves the document instead of asking; only a failed save asks.
     func windowShouldClose(_ window: NSWindow) -> Bool {
-        guard let model = editors[ObjectIdentifier(window)]?.model, model.hasUnexportedChanges else { return true }
+        guard let model = editors[ObjectIdentifier(window)]?.model, !model.saveDocument() else { return true }
         let alert = NSAlert()
-        alert.messageText = "Close without copying or saving?"
-        alert.informativeText = "Your annotations on “\(window.title)” will be lost."
-        alert.addButton(withTitle: "Save…")
+        alert.messageText = "Couldn't save “\(window.title)”"
+        alert.informativeText = model.error
         alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Close").hasDestructiveAction = true
+        alert.addButton(withTitle: "Close Anyway").hasDestructiveAction = true
         alert.beginSheetModal(for: window) { response in
-            switch response {
-            case .alertFirstButtonReturn: model.save(thenClose: true)
-            case .alertThirdButtonReturn:
-                model.hasUnexportedChanges = false
-                window.close()
-            default: break
-            }
+            if response == .alertSecondButtonReturn { window.close() }
         }
         return false
+    }
+
+    var openDocuments: [URL] { editors.values.map(\.model.documentURL) }
+
+    /// Saves every open editor's document; `false` if any failed (its editor shows why).
+    func saveEditors() -> Bool {
+        editors.values.map { $0.model.saveDocument() }.allSatisfy { $0 }
     }
 
     func windowWillClose(_ notification: Notification) {

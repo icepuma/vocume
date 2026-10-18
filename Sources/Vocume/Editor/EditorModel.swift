@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 import VocumeCore
 
 /// State and actions for one editor window.
@@ -8,14 +9,18 @@ import VocumeCore
 /// `ObservableObject` rather than `@Observable`/`@State`: those are macros, and the Command Line
 /// Tools ship without the SwiftUI macro plugin, so the app must build without them.
 @MainActor final class EditorModel: ObservableObject {
+    /// The image as a plain file, for OCR and the AI.
     let url: URL
     let image: NSImage
+    private let imageData: Data
+    /// The `.vocume` document the editor saves to, by itself: closing never asks.
+    let documentURL: URL
     weak var window: NSWindow?
 
     @Published var marks: [Mark] = [] {
         didSet {
             guard marks != oldValue else { return }
-            hasUnexportedChanges = true
+            edited()
             if !restoring { redoStack = [] }  // a new edit ends the redo history
         }
     }
@@ -24,15 +29,11 @@ import VocumeCore
     @Published private(set) var crop: CGRect? {
         didSet {
             guard crop != oldValue else { return }
-            hasUnexportedChanges = true
+            edited()
             if !restoring { redoStack = [] }
         }
     }
-    /// What undo and redo put back.
-    struct Snapshot: Equatable {
-        var marks: [Mark]
-        var crop: CGRect?
-    }
+    typealias Snapshot = VocumeDocument.State
     private var state: Snapshot {
         get { Snapshot(marks: marks, crop: crop) }
         set {
@@ -42,11 +43,9 @@ import VocumeCore
     }
     /// Undo or redo is putting back an earlier state.
     private var restoring = false
-    /// Marks changed since the last copy or save; closing asks first, and the close button shows
-    /// the standard "edited" dot.
-    var hasUnexportedChanges = false {
-        didSet { window?.isDocumentEdited = hasUnexportedChanges }
-    }
+    /// Edits so far, and how many the document file has.
+    private var edits = 0
+    private var savedEdits = 0
     @Published private(set) var undoStack: [Snapshot] = []
     @Published private(set) var redoStack: [Snapshot] = []
     @Published private(set) var tool = Tool.arrow
@@ -99,10 +98,17 @@ import VocumeCore
     private let recognition: Task<RecognizedScreenshot?, Never>
     private var claude: ClaudeSession?
 
-    init(url: URL) {
+    init(document: VocumeDocument, url documentURL: URL, image url: URL) {
         self.url = url
-        image = NSImage(contentsOf: url) ?? NSImage()
+        self.documentURL = documentURL
+        imageData = document.image
+        image = NSImage(data: document.image) ?? NSImage()
         recognition = Task.detached { RecognizedScreenshot(contentsOf: url) }
+        marks = document.state.marks
+        crop = document.state.crop
+        undoStack = document.undo
+        redoStack = document.redo
+        savedEdits = edits  // loading isn't an edit, though the didSets above counted it as one
         followSettings()
         // Settings can change while the window is open; `objectWillChange` fires before the new
         // values land, so act on the next run-loop turn.
@@ -635,26 +641,60 @@ import VocumeCore
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setData(png, forType: .png)
-        hasUnexportedChanges = false
         flash("Copied to clipboard")
     }
 
-    /// Saves a PNG via the save sheet; `thenClose` closes the window once it's written.
-    func save(thenClose: Bool = false) {
-        guard let png = renderedPNG(), let window else { return }
+    /// Saves the annotated image as a PNG, or a copy of the document, via the save sheet.
+    func save(as type: UTType = .png) {
+        guard let window else { return }
+        let png = type == .png ? renderedPNG() : nil
+        guard type != .png || png != nil else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = exportName
+        panel.allowedContentTypes = [type]
+        panel.nameFieldStringValue = type == .png ? exportName : url.deletingPathExtension().lastPathComponent
+        if type == .vocume { panel.message = "The document includes the original screenshot, under any redactions." }
         panel.beginSheetModal(for: window) { response in
             guard response == .OK, let destination = panel.url else { return }
             do {
-                try png.write(to: destination)
-                self.hasUnexportedChanges = false
+                if let png {
+                    try png.write(to: destination)
+                } else {
+                    try self.document.write(to: destination)
+                }
                 self.flash("Saved \(destination.lastPathComponent)")
-                if thenClose { window.close() }
             } catch {
                 self.error = "\(error)"
             }
+        }
+    }
+
+    // MARK: Document
+
+    private var document: VocumeDocument {
+        var document = VocumeDocument(imageName: url.lastPathComponent, image: imageData)
+        (document.state, document.undo, document.redo) = (state, undoStack, redoStack)
+        return document
+    }
+
+    /// Saves once edits pause for a second, so a drag doesn't rewrite the file on every frame.
+    private func edited() {
+        edits += 1
+        let edit = edits
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            if self?.edits == edit { self?.saveDocument() }
+        }
+    }
+
+    /// Writes the document if it is behind; `false` (with `error` set) if that failed.
+    @discardableResult func saveDocument() -> Bool {
+        guard edits != savedEdits else { return true }
+        do {
+            try document.write(to: documentURL)
+            savedEdits = edits
+            return true
+        } catch {
+            self.error = "Couldn't save \(documentURL.lastPathComponent): \(error.localizedDescription)"
+            return false
         }
     }
 
@@ -678,4 +718,9 @@ import VocumeCore
             if self?.toast == message { self?.toast = nil }
         }
     }
+}
+
+extension UTType {
+    /// `.vocume` documents, declared in Info.plist.
+    static let vocume = UTType(exportedAs: "dev.icepuma.vocume.document")
 }

@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import UniformTypeIdentifiers
 import VocumeCore
@@ -8,6 +9,7 @@ import VocumeCore
     private var statusItem: NSStatusItem?
     private var captureItems: [CaptureMode: NSMenuItem] = [:]
     private var capturing = false
+    private let recentCaptures = RecentCaptures()
 
     func applicationDidFinishLaunching(_: Notification) {
         NSApp.mainMenu = mainMenu()
@@ -15,6 +17,12 @@ import VocumeCore
         AISettings.shared.refresh()  // detect AI logins once at launch; Settings re-checks on open
         // Vision's first recognition after an update is slow; get it out of the way before a capture.
         Task.detached(priority: .utility) { RecognizedScreenshot.warmUp() }
+        // ponytail: fixed 30-day history; make it a setting if someone needs longer. Documents opened
+        // from Finder at launch arrive before this, so they're open by now and kept.
+        let open = Windows.shared.openDocuments
+        Task.detached(priority: .utility) {
+            CaptureLibrary.shared.prune(before: .now.addingTimeInterval(-30 * 86400), keeping: open)
+        }
         let shortcuts = CaptureShortcuts.shared
         shortcuts.onTrigger = { [weak self] mode in self?.capture(mode) }
         shortcuts.register()
@@ -25,6 +33,22 @@ import VocumeCore
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
         Windows.shared.reopen()
         return true
+    }
+
+    /// `.vocume` documents opened from Finder.
+    func application(_: NSApplication, open urls: [URL]) {
+        urls.forEach(Windows.shared.openEditor(for:))
+    }
+
+    /// Editors save as they go; quitting only asks if a save fails.
+    func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
+        if Windows.shared.saveEditors() { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Some captures couldn't be saved"
+        alert.informativeText = "Their editors say why. Quit anyway and lose their latest changes?"
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Quit Anyway").hasDestructiveAction = true
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
     }
 
     // MARK: Capture
@@ -63,7 +87,7 @@ import VocumeCore
     @objc private func openImage() {
         NSApp.activate()
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.png, .jpeg, .heic, .tiff]
+        panel.allowedContentTypes = [.png, .jpeg, .heic, .tiff, .vocume]
         if panel.runModal() == .OK, let url = panel.url { Windows.shared.openEditor(for: url) }
     }
 
@@ -78,6 +102,7 @@ import VocumeCore
 
     // Editor commands, routed to the editor in front.
     @objc private func saveImage() { Windows.shared.keyEditor?.save() }
+    @objc private func saveDocument() { Windows.shared.keyEditor?.save(as: .vocume) }
     @objc private func copyImage() { Windows.shared.keyEditor?.copyImage() }
     @objc private func undoMark() { Windows.shared.undo() }
     @objc private func redoMark() { Windows.shared.redo() }
@@ -99,7 +124,8 @@ import VocumeCore
         menu.delegate = self
         addCaptureItems(to: menu, keepReferences: true)
         menu.addItem(.separator())
-        menu.addItem(menuItem("Open Image…", #selector(openImage), "o"))
+        menu.addItem(menuItem("Open…", #selector(openImage), "o"))
+        menu.addItem(recentCaptures.item())
         menu.addItem(menuItem("Annotate Clipboard Image", #selector(annotateClipboard), ""))
         menu.addItem(.separator())
         menu.addItem(menuItem("Settings…", #selector(openSettings), ","))
@@ -135,11 +161,13 @@ import VocumeCore
         let file = NSMenu(title: "File")
         addCaptureItems(to: file, keepReferences: false)
         file.addItem(.separator())
-        file.addItem(menuItem("Open Image…", #selector(openImage), "o"))
+        file.addItem(menuItem("Open…", #selector(openImage), "o"))
+        file.addItem(recentCaptures.item())
         file.addItem(menuItem("Annotate Clipboard Image", #selector(annotateClipboard), ""))
         file.addItem(.separator())
         file.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         file.addItem(menuItem("Save…", #selector(saveImage), "s"))
+        file.addItem(menuItem("Save Vocume Document…", #selector(saveDocument), "S"))
         let copy = menuItem("Copy Image", #selector(copyImage), "c")
         copy.keyEquivalentModifierMask = [.command, .shift]
         file.addItem(copy)
@@ -207,5 +235,74 @@ import VocumeCore
         let entry = NSMenuItem(title: title, action: action, keyEquivalent: key)
         entry.target = self
         return entry
+    }
+}
+
+/// File ▸ Recent Captures and its copy in the menu-bar menu: the newest documents in the library,
+/// with thumbnails, filled as the menu opens. Its own delegate, so its key-equivalent rule below
+/// leaves the other menus alone.
+@MainActor private final class RecentCaptures: NSObject, NSMenuDelegate {
+    /// Thumbnails by document; a document's image never changes.
+    private var thumbnails: [URL: NSImage] = [:]
+
+    func item() -> NSMenuItem {
+        let item = NSMenuItem(title: "Recent Captures", action: nil, keyEquivalent: "")
+        item.submenu = NSMenu(title: item.title)
+        item.submenu?.delegate = self
+        return item
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let documents = CaptureLibrary.shared.recent().prefix(10)
+        for url in documents {
+            let entry = NSMenuItem(
+                title: url.deletingPathExtension().lastPathComponent, action: #selector(open(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = url
+            showThumbnail(of: url, on: entry)
+            menu.addItem(entry)
+        }
+        if documents.isEmpty { menu.addItem(withTitle: "No Captures", action: nil, keyEquivalent: "") }
+        menu.addItem(.separator())
+        let finder = NSMenuItem(title: "Show in Finder", action: #selector(showInFinder), keyEquivalent: "")
+        finder.target = self
+        menu.addItem(finder)
+    }
+
+    /// No key equivalents here: without this, AppKit fills the menu on every ⌘-key it checks.
+    func menuHasKeyEquivalent(
+        _: NSMenu, for _: NSEvent, target _: AutoreleasingUnsafeMutablePointer<AnyObject?>,
+        action _: UnsafeMutablePointer<Selector?>
+    ) -> Bool { false }
+
+    @objc private func open(_ sender: NSMenuItem) {
+        if let url = sender.representedObject as? URL { Windows.shared.openEditor(for: url) }
+    }
+
+    @objc private func showInFinder() { NSWorkspace.shared.open(CaptureLibrary.shared.folder) }
+
+    /// Reading a document takes a moment, so the thumbnail arrives after the menu is up.
+    private func showThumbnail(of url: URL, on entry: NSMenuItem) {
+        if let image = thumbnails[url] { return entry.image = image }
+        Task {
+            guard let thumbnail = await Task.detached(operation: { Self.thumbnail(of: url) }).value else { return }
+            let image = NSImage(
+                cgImage: thumbnail, size: NSSize(width: thumbnail.width / 2, height: thumbnail.height / 2))
+            thumbnails[url] = image
+            entry.image = image
+        }
+    }
+
+    /// At most 48 points (96 pixels) a side.
+    nonisolated private static func thumbnail(of url: URL) -> CGImage? {
+        guard let document = try? VocumeDocument(contentsOf: url),
+            let source = CGImageSourceCreateWithData(document.image as CFData, nil)
+        else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 96,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 }
